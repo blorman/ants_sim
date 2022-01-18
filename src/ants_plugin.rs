@@ -35,25 +35,27 @@ enum Collider {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-    commands
-        .spawn_bundle(SpriteBundle {
-            texture: asset_server.load("ant.png"),
-            transform: Transform {
-                scale: Vec3::new(5.0, 5.0, 0.0),
-                translation: Vec3::new(0.0, -50.0, 1.0),
+    for _ in 0..100 {
+        commands
+            .spawn_bundle(SpriteBundle {
+                texture: asset_server.load("ant.png"),
+                transform: Transform {
+                    scale: Vec3::new(5.0, 5.0, 0.0),
+                    translation: Vec3::new(0.0, -50.0, 1.0),
+                    ..Default::default()
+                },
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(1.0, 1.0)),
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(1.0, 1.0)),
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .insert(Ant {
-            velocity: 50.0
-                * Vec3::new(random::<f32>() - 0.5, random::<f32>() - 0.5, 0.0).normalize(),
-        })
-        .insert(Name("Bob".to_string()));
+            })
+            .insert(Ant {
+                velocity: 50.0
+                    * Vec3::new(random::<f32>() - 0.5, random::<f32>() - 0.5, 0.0).normalize(),
+            })
+            .insert(Name("Bob".to_string()));
+    }
 
     // Add walls
     let wall_color = Color::rgb(0.8, 0.8, 0.8);
@@ -126,40 +128,40 @@ fn ant_collision_system(
     mut ant_query: Query<(&mut Ant, &Transform)>,
     collider_query: Query<(&Collider, &Transform)>,
 ) {
-    let (mut ant, ant_transform) = ant_query.single_mut();
-    let ant_size = ant_transform.scale.truncate();
-    let velocity = &mut ant.velocity;
+    for (mut ant, ant_transform) in ant_query.iter_mut() {
+        let ant_size = ant_transform.scale.truncate();
 
-    // check collision with walls
-    for (_collider, transform) in collider_query.iter() {
-        let collision = collide(
-            ant_transform.translation,
-            ant_size,
-            transform.translation,
-            transform.scale.truncate(),
-        );
-        if let Some(collision) = collision {
-            // reflect the ball when it collides
-            let mut reflect_x = false;
-            let mut reflect_y = false;
+        // check collision with walls
+        for (_collider, transform) in collider_query.iter() {
+            let collision = collide(
+                ant_transform.translation,
+                ant_size,
+                transform.translation,
+                transform.scale.truncate(),
+            );
+            if let Some(collision) = collision {
+                // reflect the ball when it collides
+                let mut reflect_x = false;
+                let mut reflect_y = false;
 
-            // only reflect if the ball's velocity is going in the opposite direction of the
-            // collision
-            match collision {
-                Collision::Left => reflect_x = velocity.x > 0.0,
-                Collision::Right => reflect_x = velocity.x < 0.0,
-                Collision::Top => reflect_y = velocity.y < 0.0,
-                Collision::Bottom => reflect_y = velocity.y > 0.0,
-            }
+                // only reflect if the ball's velocity is going in the opposite direction of the
+                // collision
+                match collision {
+                    Collision::Left => reflect_x = ant.velocity.x > 0.0,
+                    Collision::Right => reflect_x = ant.velocity.x < 0.0,
+                    Collision::Top => reflect_y = ant.velocity.y < 0.0,
+                    Collision::Bottom => reflect_y = ant.velocity.y > 0.0,
+                }
 
-            // reflect velocity on the x-axis if we hit something on the x-axis
-            if reflect_x {
-                velocity.x = -velocity.x;
-            }
+                // reflect velocity on the x-axis if we hit something on the x-axis
+                if reflect_x {
+                    ant.velocity.x = -ant.velocity.x;
+                }
 
-            // reflect velocity on the y-axis if we hit something on the y-axis
-            if reflect_y {
-                velocity.y = -velocity.y;
+                // reflect velocity on the y-axis if we hit something on the y-axis
+                if reflect_y {
+                    ant.velocity.y = -ant.velocity.y;
+                }
             }
         }
     }
@@ -175,8 +177,9 @@ fn vec3_angle(v: Vec3) -> f32 {
 }
 
 fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>) {
-    let (ant, mut transform) = query.single_mut();
-    transform.translation += ant.velocity * TIME_STEP;
-    let angle = vec3_angle(ant.velocity) - std::f32::consts::PI / 4.0;
-    transform.rotation = Quat::from_rotation_z(angle);
+    for (ant, mut transform) in query.iter_mut() {
+        transform.translation += ant.velocity * TIME_STEP;
+        let angle = vec3_angle(ant.velocity) - std::f32::consts::PI / 4.0;
+        transform.rotation = Quat::from_rotation_z(angle);
+    }
 }
