@@ -26,9 +26,6 @@ struct Ant {
 }
 
 #[derive(Component)]
-struct Name(String);
-
-#[derive(Component)]
 enum Collider {
     Solid,
 }
@@ -51,8 +48,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
                 ..Default::default()
             })
-            .insert(Ant { speed: 50.0 })
-            .insert(Name("Bob".to_string()));
+            .insert(Ant { speed: 50.0 });
     }
 
     // Add walls
