@@ -7,18 +7,16 @@ use bevy::{
 pub struct AntsPlugin;
 
 const TIME_STEP: f32 = 1.0 / 60.0;
+const SPRITE_SIZE: f32 = 10.0;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(GreetTimer(Timer::from_seconds(2.0, true)))
-            .add_startup_system(setup)
-            .add_system_set(
-                SystemSet::new()
-                    .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                    .with_system(ant_collision_system)
-                    .with_system(ant_movement_system),
-            )
-            .add_system(greet_ants);
+        app.add_startup_system(setup).add_system_set(
+            SystemSet::new()
+                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+                .with_system(ant_collision_system)
+                .with_system(ant_movement_system),
+        );
     }
 }
 
@@ -35,19 +33,18 @@ enum Collider {
     Solid,
 }
 
-struct GreetTimer(Timer);
-
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     commands
         .spawn_bundle(SpriteBundle {
+            texture: asset_server.load("ant.png"),
             transform: Transform {
                 scale: Vec3::new(30.0, 30.0, 0.0),
                 translation: Vec3::new(0.0, -50.0, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
-                color: Color::rgb(1.0, 0.5, 0.5),
+                custom_size: Some(Vec2::new(SPRITE_SIZE, SPRITE_SIZE)),
                 ..Default::default()
             },
             ..Default::default()
@@ -170,12 +167,8 @@ fn ant_collision_system(
 fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>) {
     let (ant, mut transform) = query.single_mut();
     transform.translation += ant.velocity * TIME_STEP;
-}
-
-fn greet_ants(time: Res<Time>, mut timer: ResMut<GreetTimer>, query: Query<&Name, With<Ant>>) {
-    if timer.0.tick(time.delta()).just_finished() {
-        for name in query.iter() {
-            println!("hello {}!", name.0);
-        }
-    }
+    let angle = ant.velocity.angle_between(Vec3::X);
+    let angle = if ant.velocity.y < 0.0 { -angle } else { angle };
+    let angle = angle - std::f32::consts::PI / 4.0;
+    transform.rotation = Quat::from_rotation_z(angle);
 }
