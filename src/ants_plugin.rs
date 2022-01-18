@@ -8,6 +8,7 @@ use rand::prelude::random;
 pub struct AntsPlugin;
 
 const TIME_STEP: f32 = 1.0 / 60.0;
+const ANT_RANDOM_WANDERING: f32 = 0.5;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
@@ -177,5 +178,9 @@ fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>) {
     for (ant, mut transform) in query.iter_mut() {
         let velocity = transform.rotation * Vec3::X * ant.speed;
         transform.translation += velocity * TIME_STEP;
+
+        let angle = vec3_angle(velocity);
+        let wandering_angle_delta = ANT_RANDOM_WANDERING * (random::<f32>() - 0.5);
+        transform.rotation = Quat::from_rotation_z(angle + wandering_angle_delta);
     }
 }
