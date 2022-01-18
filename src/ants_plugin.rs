@@ -3,6 +3,7 @@ use bevy::{
     prelude::*,
     sprite::collide_aabb::{collide, Collision},
 };
+use rand::prelude::random;
 
 pub struct AntsPlugin;
 
@@ -49,7 +50,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(Ant {
-            velocity: 50.0 * Vec3::new(0.5, -0.5, 0.0).normalize(),
+            velocity: 50.0
+                * Vec3::new(random::<f32>() - 0.5, random::<f32>() - 0.5, 0.0).normalize(),
         })
         .insert(Name("Bob".to_string()));
 
