@@ -179,7 +179,7 @@ fn vec3_angle(v: Vec3) -> f32 {
 fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>) {
     for (ant, mut transform) in query.iter_mut() {
         transform.translation += ant.velocity * TIME_STEP;
-        let angle = vec3_angle(ant.velocity) - std::f32::consts::PI / 4.0;
+        let angle = vec3_angle(ant.velocity);
         transform.rotation = Quat::from_rotation_z(angle);
     }
 }
