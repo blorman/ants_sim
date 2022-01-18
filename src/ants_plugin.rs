@@ -164,11 +164,18 @@ fn ant_collision_system(
     }
 }
 
+fn vec3_angle(v: Vec3) -> f32 {
+    let angle = v.angle_between(Vec3::X);
+    if v.y < 0.0 {
+        -angle
+    } else {
+        angle
+    }
+}
+
 fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>) {
     let (ant, mut transform) = query.single_mut();
     transform.translation += ant.velocity * TIME_STEP;
-    let angle = ant.velocity.angle_between(Vec3::X);
-    let angle = if ant.velocity.y < 0.0 { -angle } else { angle };
-    let angle = angle - std::f32::consts::PI / 4.0;
+    let angle = vec3_angle(ant.velocity) - std::f32::consts::PI / 4.0;
     transform.rotation = Quat::from_rotation_z(angle);
 }
