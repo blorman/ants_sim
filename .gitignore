@@ -1,4 +1,4 @@
 # Specify filepatterns you want git to ignore.
 target/*
 .DS_Store
-.ants_sim.sublime-workspace
+ants_sim.sublime-workspace

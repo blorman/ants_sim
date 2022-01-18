@@ -7,7 +7,6 @@ use bevy::{
 pub struct AntsPlugin;
 
 const TIME_STEP: f32 = 1.0 / 60.0;
-const SPRITE_SIZE: f32 = 10.0;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
@@ -39,18 +38,18 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .spawn_bundle(SpriteBundle {
             texture: asset_server.load("ant.png"),
             transform: Transform {
-                scale: Vec3::new(30.0, 30.0, 0.0),
+                scale: Vec3::new(5.0, 5.0, 0.0),
                 translation: Vec3::new(0.0, -50.0, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
-                custom_size: Some(Vec2::new(SPRITE_SIZE, SPRITE_SIZE)),
+                custom_size: Some(Vec2::new(1.0, 1.0)),
                 ..Default::default()
             },
             ..Default::default()
         })
         .insert(Ant {
-            velocity: 400.0 * Vec3::new(0.5, -0.5, 0.0).normalize(),
+            velocity: 50.0 * Vec3::new(0.5, -0.5, 0.0).normalize(),
         })
         .insert(Name("Bob".to_string()));
 
