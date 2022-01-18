@@ -151,14 +151,16 @@ fn ant_collision_system(
 
                 // reflect velocity on the x-axis if we hit something on the x-axis
                 if reflect_x {
-                    let angle = vec3_angle(velocity);
-                    ant_transform.rotation = Quat::from_rotation_z(std::f32::consts::PI - angle);
+                    let clamped_velocity = Vec3::new(0.0, velocity.y, 0.0);
+                    let angle = vec3_angle(clamped_velocity);
+                    ant_transform.rotation = Quat::from_rotation_z(angle);
                 }
 
                 // reflect velocity on the y-axis if we hit something on the y-axis
                 if reflect_y {
-                    let angle = vec3_angle(velocity);
-                    ant_transform.rotation = Quat::from_rotation_z(-angle);
+                    let clamped_velocity = Vec3::new(velocity.x, 0.0, 0.0);
+                    let angle = vec3_angle(clamped_velocity);
+                    ant_transform.rotation = Quat::from_rotation_z(angle);
                 }
             }
         }
