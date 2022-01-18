@@ -1,0 +1,13 @@
+{
+	"settings":
+	{
+		"LSP":
+		{
+			"rust-analyzer":
+			{
+				"enabled": true,
+			},
+		},
+	    "lsp_format_on_save": true
+	},
+}
