@@ -132,39 +132,44 @@ fn ant_collision_system(
 
         // check collision with walls
         for (_collider, transform) in collider_query.iter() {
-            let collision = collide(
-                ant_transform.translation,
-                ant_size,
-                transform.translation,
-                transform.scale.truncate(),
-            );
-            if let Some(collision) = collision {
-                // reflect the ball when it collides
-                let mut reflect_x = false;
-                let mut reflect_y = false;
-                let direction = ant_transform.rotation * Vec3::X;
+            let a = ant_transform.translation.x - transform.translation.x;
+            let b = ant_transform.translation.y - transform.translation.y;
+            let c = transform.scale.x.max(transform.scale.y);
+            if a * a + b * b < c * c {
+                let collision = collide(
+                    ant_transform.translation,
+                    ant_size,
+                    transform.translation,
+                    transform.scale.truncate(),
+                );
+                if let Some(collision) = collision {
+                    // reflect the ball when it collides
+                    let mut reflect_x = false;
+                    let mut reflect_y = false;
+                    let direction = ant_transform.rotation * Vec3::X;
 
-                // only reflect if the ball's velocity is going in the opposite direction of the
-                // collision
-                match collision {
-                    Collision::Left => reflect_x = direction.x > 0.0,
-                    Collision::Right => reflect_x = direction.x < 0.0,
-                    Collision::Top => reflect_y = direction.y < 0.0,
-                    Collision::Bottom => reflect_y = direction.y > 0.0,
-                }
+                    // only reflect if the ball's velocity is going in the opposite direction of the
+                    // collision
+                    match collision {
+                        Collision::Left => reflect_x = direction.x > 0.0,
+                        Collision::Right => reflect_x = direction.x < 0.0,
+                        Collision::Top => reflect_y = direction.y < 0.0,
+                        Collision::Bottom => reflect_y = direction.y > 0.0,
+                    }
 
-                // reflect velocity on the x-axis if we hit something on the x-axis
-                if reflect_x {
-                    let clamped_direction = Vec3::new(0.0, direction.y, 0.0);
-                    let angle = vec3_angle(clamped_direction);
-                    ant_transform.rotation = Quat::from_rotation_z(angle);
-                }
+                    // reflect velocity on the x-axis if we hit something on the x-axis
+                    if reflect_x {
+                        let clamped_direction = Vec3::new(-direction.x * 0.1, direction.y, 0.0);
+                        let angle = vec3_angle(clamped_direction);
+                        ant_transform.rotation = Quat::from_rotation_z(angle);
+                    }
 
-                // reflect velocity on the y-axis if we hit something on the y-axis
-                if reflect_y {
-                    let clamped_direction = Vec3::new(direction.x, 0.0, 0.0);
-                    let angle = vec3_angle(clamped_direction);
-                    ant_transform.rotation = Quat::from_rotation_z(angle);
+                    // reflect velocity on the y-axis if we hit something on the y-axis
+                    if reflect_y {
+                        let clamped_direction = Vec3::new(direction.x, -direction.y * 0.1, 0.0);
+                        let angle = vec3_angle(clamped_direction);
+                        ant_transform.rotation = Quat::from_rotation_z(angle);
+                    }
                 }
             }
         }
