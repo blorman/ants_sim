@@ -1,3 +1,5 @@
+use crate::console_debug_plugin::Config;
+use crate::console_debug_plugin::ConfigValue;
 use bevy::{
     core::FixedTimestep,
     prelude::*,
@@ -12,26 +14,28 @@ const ANT_RANDOM_WANDERING: f32 = 0.5;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(setup).add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                .with_system(ant_collision_system)
-                .with_system(ant_movement_system),
-        );
+        app.init_resource::<Config>()
+            .add_startup_system(setup)
+            .add_system_set(
+                SystemSet::new()
+                    .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+                    .with_system(ant_collision_system)
+                    .with_system(ant_movement_system),
+            );
     }
 }
 
 #[derive(Component)]
-struct Ant {
-    speed: f32,
-}
+struct Ant {}
 
 #[derive(Component)]
 enum Collider {
     Solid,
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
+    config.entries.insert("ant.speed", ConfigValue::Float(50.0));
+
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     for _ in 0..100 {
         commands
@@ -49,7 +53,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 },
                 ..Default::default()
             })
-            .insert(Ant { speed: 50.0 });
+            .insert(Ant {});
     }
 
     // Add walls
@@ -123,7 +127,7 @@ fn ant_collision_system(
     mut ant_query: Query<(&Ant, &mut Transform), Without<Collider>>,
     collider_query: Query<(&Collider, &Transform), Without<Ant>>,
 ) {
-    for (ant, mut ant_transform) in ant_query.iter_mut() {
+    for (_ant, mut ant_transform) in ant_query.iter_mut() {
         let ant_size = ant_transform.scale.truncate();
 
         // check collision with walls
@@ -138,28 +142,28 @@ fn ant_collision_system(
                 // reflect the ball when it collides
                 let mut reflect_x = false;
                 let mut reflect_y = false;
-                let velocity = (ant_transform.rotation * Vec3::X) * ant.speed;
+                let direction = ant_transform.rotation * Vec3::X;
 
                 // only reflect if the ball's velocity is going in the opposite direction of the
                 // collision
                 match collision {
-                    Collision::Left => reflect_x = velocity.x > 0.0,
-                    Collision::Right => reflect_x = velocity.x < 0.0,
-                    Collision::Top => reflect_y = velocity.y < 0.0,
-                    Collision::Bottom => reflect_y = velocity.y > 0.0,
+                    Collision::Left => reflect_x = direction.x > 0.0,
+                    Collision::Right => reflect_x = direction.x < 0.0,
+                    Collision::Top => reflect_y = direction.y < 0.0,
+                    Collision::Bottom => reflect_y = direction.y > 0.0,
                 }
 
                 // reflect velocity on the x-axis if we hit something on the x-axis
                 if reflect_x {
-                    let clamped_velocity = Vec3::new(0.0, velocity.y, 0.0);
-                    let angle = vec3_angle(clamped_velocity);
+                    let clamped_direction = Vec3::new(0.0, direction.y, 0.0);
+                    let angle = vec3_angle(clamped_direction);
                     ant_transform.rotation = Quat::from_rotation_z(angle);
                 }
 
                 // reflect velocity on the y-axis if we hit something on the y-axis
                 if reflect_y {
-                    let clamped_velocity = Vec3::new(velocity.x, 0.0, 0.0);
-                    let angle = vec3_angle(clamped_velocity);
+                    let clamped_direction = Vec3::new(direction.x, 0.0, 0.0);
+                    let angle = vec3_angle(clamped_direction);
                     ant_transform.rotation = Quat::from_rotation_z(angle);
                 }
             }
@@ -176,9 +180,9 @@ fn vec3_angle(v: Vec3) -> f32 {
     }
 }
 
-fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>) {
+fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>, config: Res<Config>) {
     for (ant, mut transform) in query.iter_mut() {
-        let velocity = transform.rotation * Vec3::X * ant.speed;
+        let velocity = transform.rotation * Vec3::X * config.entries["ant.speed"].float();
         transform.translation += velocity * TIME_STEP;
 
         let angle = vec3_angle(velocity);
