@@ -23,6 +23,7 @@ impl Plugin for AntsPlugin {
             .add_system_set(
                 SystemSet::new()
                     .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+                    .with_system(mouse_input_system)
                     .with_system(ant_collision_system)
                     .with_system(ant_movement_system)
                     .with_system(map_generator_system),
@@ -151,6 +152,30 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
             ..Default::default()
         })
         .insert(Collider::Solid);
+}
+
+fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
+    let norm = Vec3::new(
+        position.x - window.width() / 2.,
+        position.y - window.height() / 2.,
+        0.,
+    );
+    *camera * norm
+}
+
+fn mouse_input_system(
+    mut commands: Commands,
+    buttons: Res<Input<MouseButton>>,
+    windows: Res<Windows>,
+    transform_query: Query<&Transform, With<Camera>>,
+) {
+    if buttons.pressed(MouseButton::Left) {
+        let window = windows.get_primary().unwrap();
+        if let Some(cursor_pos) = window.cursor_position() {
+            let world_cursor_pos = window_to_world(cursor_pos, window, transform_query.single());
+            spawn_obstacle(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+        }
+    }
 }
 
 fn map_generator_system(
