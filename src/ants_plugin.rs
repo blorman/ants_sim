@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
     sprite::collide_aabb::{collide, Collision},
 };
-use noise::{NoiseFn, OpenSimplex};
+use noise::{HybridMulti, MultiFractal, NoiseFn};
 use rand::prelude::random;
 
 pub struct AntsPlugin;
@@ -42,14 +42,28 @@ struct Obstacle {}
 
 #[derive(Default)]
 struct MapGenerator {
-    noise_threshold: f32,
-    noise_scale: f32,
+    octaves: usize,
+    frequency: f64,
+    lacunarity: f64,
+    persistence: f64,
+    threshold: f64,
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
     config.entries.insert("ant.speed", ConfigValue::Float(50.0));
-    config.entries.insert("ot", ConfigValue::Float(0.2));
-    config.entries.insert("os", ConfigValue::Float(0.015));
+    config.entries.insert("map.octaves", ConfigValue::Int(4));
+    config
+        .entries
+        .insert("map.frequency", ConfigValue::Float(0.01));
+    config
+        .entries
+        .insert("map.lacunarity", ConfigValue::Float(1.0));
+    config
+        .entries
+        .insert("map.persistence", ConfigValue::Float(0.25));
+    config
+        .entries
+        .insert("map.threshold", ConfigValue::Float(0.4));
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     for _ in 0..100 {
@@ -144,13 +158,24 @@ fn map_generator_system(
     mut map_generator: ResMut<MapGenerator>,
     obstacle_query: Query<Entity, With<Obstacle>>,
 ) {
-    if map_generator.noise_threshold == config.entries["ot"].float()
-        && map_generator.noise_scale == config.entries["os"].float()
+    if map_generator.octaves == config.entries["map.octaves"].usize()
+        && map_generator.frequency == config.entries["map.frequency"].f64()
+        && map_generator.lacunarity == config.entries["map.lacunarity"].f64()
+        && map_generator.persistence == config.entries["map.persistence"].f64()
+        && map_generator.threshold == config.entries["map.threshold"].f64()
     {
         return;
     }
-    map_generator.noise_threshold = config.entries["ot"].float();
-    map_generator.noise_scale = config.entries["os"].float();
+    map_generator.octaves = config.entries["map.octaves"].usize();
+    map_generator.frequency = config.entries["map.frequency"].f64();
+    map_generator.lacunarity = config.entries["map.lacunarity"].f64();
+    map_generator.persistence = config.entries["map.persistence"].f64();
+    map_generator.threshold = config.entries["map.threshold"].f64();
+    let noise = HybridMulti::new()
+        .set_octaves(map_generator.octaves)
+        .set_frequency(map_generator.frequency)
+        .set_lacunarity(map_generator.lacunarity)
+        .set_persistence(map_generator.persistence);
 
     for entity in obstacle_query.iter() {
         commands.entity(entity).despawn();
@@ -162,15 +187,11 @@ fn map_generator_system(
     let bounds = Vec2::new(900.0, 600.0);
     let num_tiles_x = (bounds.x / obstacle_tile_size) as i32;
     let num_tiles_y = (bounds.y / obstacle_tile_size) as i32;
-    let simplex = OpenSimplex::new();
     for i in 0..num_tiles_x {
         for j in 0..num_tiles_y {
             let ox = obstacle_tile_size * ((i - num_tiles_x / 2) as f32) + obstacle_tile_size / 2.0;
             let oy = obstacle_tile_size * ((num_tiles_y / 2 - j) as f32) - obstacle_tile_size / 2.0;
-            let simplex_scale = map_generator.noise_scale;
-            if simplex.get([(ox * simplex_scale) as f64, (oy * simplex_scale) as f64])
-                < map_generator.noise_threshold as f64
-            {
+            if noise.get([ox as f64, oy as f64]) < map_generator.threshold {
                 continue;
             }
             commands
@@ -256,7 +277,7 @@ fn vec3_angle(v: Vec3) -> f32 {
 
 fn ant_movement_system(mut query: Query<&mut Transform, With<Ant>>, config: Res<Config>) {
     for mut transform in query.iter_mut() {
-        let velocity = transform.rotation * Vec3::X * config.entries["ant.speed"].float();
+        let velocity = transform.rotation * Vec3::X * config.entries["ant.speed"].f32();
         transform.translation += velocity * TIME_STEP;
 
         let angle = vec3_angle(velocity);

@@ -61,10 +61,22 @@ pub enum ConfigValue {
 }
 
 impl ConfigValue {
-    pub fn float(&self) -> f32 {
+    pub fn f32(&self) -> f32 {
         match self {
             ConfigValue::Float(f) => *f,
             _ => 0.0
+        }
+    }
+    pub fn f64(&self) -> f64 {
+        match self {
+            ConfigValue::Float(f) => *f as f64,
+            _ => 0.0
+        }
+    }
+    pub fn usize(&self) -> usize {
+        match self {
+            ConfigValue::Int(i) => *i as usize,
+            _ => 0
         }
     }
 }
