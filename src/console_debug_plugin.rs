@@ -3,7 +3,7 @@ use bevy::{
     tasks::AsyncComputeTaskPool,
 };
 use crossbeam::channel::{bounded, Receiver};
-use clap::{App, Arg, ArgMatches};
+use clap::{App, ArgMatches};
 use std::io::{self, BufRead, Write};
 use std::collections::HashMap;
 

@@ -10,3 +10,4 @@ bevy = { version = "0.6.0", features = ["dynamic"] }
 rand = "0.7.3"
 crossbeam = "0.8"
 clap = "3.0.10"
+noise = "0.7.0"

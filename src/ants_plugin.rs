@@ -5,6 +5,7 @@ use bevy::{
     prelude::*,
     sprite::collide_aabb::{collide, Collision},
 };
+use noise::{NoiseFn, OpenSimplex};
 use rand::prelude::random;
 
 pub struct AntsPlugin;
@@ -15,12 +16,15 @@ const ANT_RANDOM_WANDERING: f32 = 0.5;
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Config>()
-            .add_startup_system(setup)
+            .init_resource::<MapGenerator>()
+            .add_startup_system(setup.label("setup"))
+            .add_startup_system(map_generator_system.after("setup"))
             .add_system_set(
                 SystemSet::new()
                     .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
                     .with_system(ant_collision_system)
-                    .with_system(ant_movement_system),
+                    .with_system(ant_movement_system)
+                    .with_system(map_generator_system),
             );
     }
 }
@@ -33,8 +37,19 @@ enum Collider {
     Solid,
 }
 
+#[derive(Component)]
+struct Obstacle {}
+
+#[derive(Default)]
+struct MapGenerator {
+    noise_threshold: f32,
+    noise_scale: f32,
+}
+
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
     config.entries.insert("ant.speed", ConfigValue::Float(50.0));
+    config.entries.insert("ot", ConfigValue::Float(0.2));
+    config.entries.insert("os", ConfigValue::Float(0.015));
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     for _ in 0..100 {
@@ -123,6 +138,60 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
         .insert(Collider::Solid);
 }
 
+fn map_generator_system(
+    mut commands: Commands,
+    config: ResMut<Config>,
+    mut map_generator: ResMut<MapGenerator>,
+    obstacle_query: Query<Entity, With<Obstacle>>,
+) {
+    if map_generator.noise_threshold == config.entries["ot"].float()
+        && map_generator.noise_scale == config.entries["os"].float()
+    {
+        return;
+    }
+    map_generator.noise_threshold = config.entries["ot"].float();
+    map_generator.noise_scale = config.entries["os"].float();
+
+    for entity in obstacle_query.iter() {
+        commands.entity(entity).despawn();
+    }
+
+    // obstacles
+    let obstacle_color = Color::rgb(0.65, 0.16, 0.16);
+    let obstacle_tile_size = 10.0;
+    let bounds = Vec2::new(900.0, 600.0);
+    let num_tiles_x = (bounds.x / obstacle_tile_size) as i32;
+    let num_tiles_y = (bounds.y / obstacle_tile_size) as i32;
+    let simplex = OpenSimplex::new();
+    for i in 0..num_tiles_x {
+        for j in 0..num_tiles_y {
+            let ox = obstacle_tile_size * ((i - num_tiles_x / 2) as f32) + obstacle_tile_size / 2.0;
+            let oy = obstacle_tile_size * ((num_tiles_y / 2 - j) as f32) - obstacle_tile_size / 2.0;
+            let simplex_scale = map_generator.noise_scale;
+            if simplex.get([(ox * simplex_scale) as f64, (oy * simplex_scale) as f64])
+                < map_generator.noise_threshold as f64
+            {
+                continue;
+            }
+            commands
+                .spawn_bundle(SpriteBundle {
+                    transform: Transform {
+                        translation: Vec3::new(ox, oy, 0.0),
+                        scale: Vec3::new(obstacle_tile_size, obstacle_tile_size, 1.0),
+                        ..Default::default()
+                    },
+                    sprite: Sprite {
+                        color: obstacle_color,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                })
+                .insert(Collider::Solid)
+                .insert(Obstacle {});
+        }
+    }
+}
+
 fn ant_collision_system(
     mut ant_query: Query<(&Ant, &mut Transform), Without<Collider>>,
     collider_query: Query<(&Collider, &Transform), Without<Ant>>,
@@ -185,8 +254,8 @@ fn vec3_angle(v: Vec3) -> f32 {
     }
 }
 
-fn ant_movement_system(mut query: Query<(&Ant, &mut Transform)>, config: Res<Config>) {
-    for (ant, mut transform) in query.iter_mut() {
+fn ant_movement_system(mut query: Query<&mut Transform, With<Ant>>, config: Res<Config>) {
+    for mut transform in query.iter_mut() {
         let velocity = transform.rotation * Vec3::X * config.entries["ant.speed"].float();
         transform.translation += velocity * TIME_STEP;
 
