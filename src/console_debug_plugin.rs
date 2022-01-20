@@ -1,10 +1,11 @@
+use bevy::app::AppExit;
 use bevy::{
     prelude::*,
     tasks::AsyncComputeTaskPool,
 };
 use crossbeam::channel::{bounded, Receiver};
 use clap::{App, ArgMatches};
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 use std::collections::HashMap;
 
 fn spawn_io_thread(mut commands: Commands, thread_pool: Res<AsyncComputeTaskPool>) {
@@ -14,11 +15,21 @@ fn spawn_io_thread(mut commands: Commands, thread_pool: Res<AsyncComputeTaskPool
 
     let (tx, rx) = bounded(1);
     let task = thread_pool.spawn(async move {
-        let stdin = io::stdin();
+        let mut rl = rustyline::Editor::<()>::new();
         loop {
-            let line = stdin.lock().lines().next().unwrap().unwrap();
-            tx.send(line)
-                .expect("error sending user input to other thread");
+            let readline = rl.readline(">> ");
+            match readline {
+                Ok(line) => {
+                    rl.add_history_entry(line.as_str());
+                    let quit = line == "quit";
+                    tx.send(line)
+                     .expect("error sending user input to other thread");
+                    if quit {
+                        break;
+                    }
+                },
+                Err(_) => println!("No input"),
+            }
         }
     });
     task.detach();
@@ -26,7 +37,7 @@ fn spawn_io_thread(mut commands: Commands, thread_pool: Res<AsyncComputeTaskPool
 }
 
 fn parse_input(
-    line_channel: Res<Receiver<String>>, mut config: ResMut<Config>
+    line_channel: Res<Receiver<String>>, mut config: ResMut<Config>, exit: EventWriter<AppExit>
 ) {
     if let Ok(line) = line_channel.try_recv() {
         let app_name = "";
@@ -39,17 +50,17 @@ fn parse_input(
 
         if let Err(e) = matches_result {
             println!("{}", e.to_string());
-            print!(">>> ");
+            print!(">> ");
             io::stdout().flush().unwrap();
             return;
         }
 
         let matches = matches_result.unwrap();
 
-        let output = match_commands(&matches, &mut config);
+        let output = match_commands(&matches, &mut config, exit);
 
         println!("{}", output);
-        print!(">>> ");
+        print!(">> ");
         io::stdout().flush().unwrap();
     }
 }
@@ -88,6 +99,7 @@ pub struct Config {
 
 pub fn build_commands<'a>(app_name: &'a str) -> App {
     let app = clap::App::new(app_name)
+        .subcommand(clap::App::new("quit"))
         .subcommand(clap::App::new("config_get")
             .about("get convig value")
             .arg(clap::arg!([key] "'string key of entry to get'")))
@@ -98,11 +110,11 @@ pub fn build_commands<'a>(app_name: &'a str) -> App {
     app
 }
 
-pub fn match_commands(matches: &ArgMatches, config: &mut Config) -> String {
+pub fn match_commands(matches: &ArgMatches, config: &mut Config, mut exit: EventWriter<AppExit>) -> String {
         let mut output = String::new();
     match matches.subcommand() {
-        Some(("foo", _)) => {
-            output.push_str("...foo command!.");
+        Some(("quit", _)) => {
+            exit.send(AppExit);
         }
         Some(("config_get", s_matches)) => {
             output.push_str("...config_get command!");
