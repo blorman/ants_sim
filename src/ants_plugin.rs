@@ -13,11 +13,15 @@ pub struct AntsPlugin;
 const TIME_STEP: f32 = 1.0 / 60.0;
 const ANT_RANDOM_WANDERING: f32 = 0.5;
 const OBSTACLE_TILE_SIZE: f32 = 10.0;
+const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
+const FOOD_SIZE: f32 = 5.0;
+const FOOD_COLOR: Color = Color::rgb(0.0, 0.65, 0.0);
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Config>()
             .init_resource::<MapGenerator>()
+            .init_resource::<EditorInput>()
             .add_startup_system(setup.label("setup"))
             .add_startup_system(map_generator_system.after("setup"))
             .add_system_set(
@@ -39,8 +43,17 @@ enum Collider {
     Solid,
 }
 
+#[derive(Component, Copy, Clone)]
+enum Icon {
+    SpawnObstacle,
+    SpawnFood,
+}
+
 #[derive(Component)]
 struct Obstacle {}
+
+#[derive(Component)]
+struct Food {}
 
 #[derive(Default)]
 struct MapGenerator {
@@ -49,6 +62,11 @@ struct MapGenerator {
     lacunarity: f64,
     persistence: f64,
     threshold: f64,
+}
+
+#[derive(Default)]
+struct EditorInput {
+    selected_icon: Option<Icon>,
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
@@ -152,6 +170,36 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
             ..Default::default()
         })
         .insert(Collider::Solid);
+
+    // icons
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(-bounds.x / 2.0 - 50.0, bounds.y / 2.0 - 15.0, 0.0),
+                scale: Vec3::new(40.0, 40.0, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: OBSTACLE_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Icon::SpawnObstacle);
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(-bounds.x / 2.0 - 50.0, bounds.y / 2.0 - 60.0, 0.0),
+                scale: Vec3::new(40.0, 40.0, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: FOOD_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Icon::SpawnFood);
 }
 
 fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
@@ -167,24 +215,66 @@ fn mouse_input_system(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
     windows: Res<Windows>,
+    mut editor_input: ResMut<EditorInput>,
     transform_query: Query<&Transform, With<Camera>>,
     collider_query: Query<(Entity, &Collider, &Transform), Without<Ant>>,
+    food_query: Query<(Entity, &Food, &Transform)>,
+    icon_query: Query<(&Icon, &Transform)>,
 ) {
     let window = windows.get_primary().unwrap();
     if let Some(cursor_pos) = window.cursor_position() {
         let world_cursor_pos = window_to_world(cursor_pos, window, transform_query.single());
-        if buttons.pressed(MouseButton::Left) {
-            spawn_obstacle(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
-        } else if buttons.pressed(MouseButton::Right) {
-            for (entity, _collider, transform) in collider_query.iter() {
+
+        if buttons.just_pressed(MouseButton::Left) {
+            for (icon, transform) in icon_query.iter() {
                 if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
                     && world_cursor_pos.x < transform.translation.x + transform.scale.x / 2.0
                     && world_cursor_pos.y > transform.translation.y - transform.scale.y / 2.0
                     && world_cursor_pos.y < transform.translation.y + transform.scale.y / 2.0
                 {
-                    commands.entity(entity).despawn();
+                    editor_input.selected_icon = Some(*icon);
                 }
             }
+        }
+
+        match editor_input.selected_icon {
+            Some(Icon::SpawnObstacle) => {
+                if buttons.pressed(MouseButton::Left) {
+                    spawn_obstacle(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                } else if buttons.pressed(MouseButton::Right) {
+                    for (entity, _collider, transform) in collider_query.iter() {
+                        if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
+                            && world_cursor_pos.x
+                                < transform.translation.x + transform.scale.x / 2.0
+                            && world_cursor_pos.y
+                                > transform.translation.y - transform.scale.y / 2.0
+                            && world_cursor_pos.y
+                                < transform.translation.y + transform.scale.y / 2.0
+                        {
+                            commands.entity(entity).despawn();
+                        }
+                    }
+                }
+            }
+            Some(Icon::SpawnFood) => {
+                if buttons.pressed(MouseButton::Left) {
+                    spawn_food(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                } else if buttons.pressed(MouseButton::Right) {
+                    for (entity, _food, transform) in food_query.iter() {
+                        if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
+                            && world_cursor_pos.x
+                                < transform.translation.x + transform.scale.x / 2.0
+                            && world_cursor_pos.y
+                                > transform.translation.y - transform.scale.y / 2.0
+                            && world_cursor_pos.y
+                                < transform.translation.y + transform.scale.y / 2.0
+                        {
+                            commands.entity(entity).despawn();
+                        }
+                    }
+                }
+            }
+            None => (),
         }
     }
 }
@@ -235,7 +325,6 @@ fn map_generator_system(
 }
 
 fn spawn_obstacle(x: f32, y: f32, commands: &mut Commands) {
-    let obstacle_color = Color::rgb(0.65, 0.16, 0.16);
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
@@ -244,13 +333,30 @@ fn spawn_obstacle(x: f32, y: f32, commands: &mut Commands) {
                 ..Default::default()
             },
             sprite: Sprite {
-                color: obstacle_color,
+                color: OBSTACLE_COLOR,
                 ..Default::default()
             },
             ..Default::default()
         })
         .insert(Collider::Solid)
         .insert(Obstacle {});
+}
+
+fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(x, y, 0.0),
+                scale: Vec3::new(FOOD_SIZE, FOOD_SIZE, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: FOOD_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Food {});
 }
 
 fn ant_collision_system(
