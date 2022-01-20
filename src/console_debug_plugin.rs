@@ -7,6 +7,7 @@ use crossbeam::channel::{bounded, Receiver};
 use clap::{App, ArgMatches};
 use std::io::{self, Write};
 use std::collections::HashMap;
+use std::fmt;
 
 fn spawn_io_thread(mut commands: Commands, thread_pool: Res<AsyncComputeTaskPool>) {
     println!("Bevy Console Debugger.  Type 'help' for list of commands.");
@@ -92,6 +93,16 @@ impl ConfigValue {
     }
 }
 
+impl fmt::Display for ConfigValue {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+          ConfigValue::Int(i) => write!(fmt, "{}", i),
+          ConfigValue::Float(f) => write!(fmt, "{}", f),
+          ConfigValue::String(s) => write!(fmt, "{}", s),
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Config {
     pub entries: HashMap<&'static str, ConfigValue>,
@@ -100,6 +111,8 @@ pub struct Config {
 pub fn build_commands<'a>(app_name: &'a str) -> App {
     let app = clap::App::new(app_name)
         .subcommand(clap::App::new("quit"))
+        .subcommand(clap::App::new("config_ls")
+            .about("list all config entries"))
         .subcommand(clap::App::new("config_get")
             .about("get convig value")
             .arg(clap::arg!([key] "'string key of entry to get'")))
@@ -115,6 +128,11 @@ pub fn match_commands(matches: &ArgMatches, config: &mut Config, mut exit: Event
     match matches.subcommand() {
         Some(("quit", _)) => {
             exit.send(AppExit);
+        }
+        Some(("config_ls", _)) => {
+            for (ref key, value) in &config.entries {
+                println!("{:20} {}", key, value);
+             }
         }
         Some(("config_get", s_matches)) => {
             output.push_str("...config_get command!");
