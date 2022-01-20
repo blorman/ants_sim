@@ -12,6 +12,7 @@ pub struct AntsPlugin;
 
 const TIME_STEP: f32 = 1.0 / 60.0;
 const ANT_RANDOM_WANDERING: f32 = 0.5;
+const OBSTACLE_TILE_SIZE: f32 = 10.0;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
@@ -182,35 +183,38 @@ fn map_generator_system(
     }
 
     // obstacles
-    let obstacle_color = Color::rgb(0.65, 0.16, 0.16);
-    let obstacle_tile_size = 10.0;
     let bounds = Vec2::new(900.0, 600.0);
-    let num_tiles_x = (bounds.x / obstacle_tile_size) as i32;
-    let num_tiles_y = (bounds.y / obstacle_tile_size) as i32;
+    let num_tiles_x = (bounds.x / OBSTACLE_TILE_SIZE) as i32;
+    let num_tiles_y = (bounds.y / OBSTACLE_TILE_SIZE) as i32;
     for i in 0..num_tiles_x {
         for j in 0..num_tiles_y {
-            let ox = obstacle_tile_size * ((i - num_tiles_x / 2) as f32) + obstacle_tile_size / 2.0;
-            let oy = obstacle_tile_size * ((num_tiles_y / 2 - j) as f32) - obstacle_tile_size / 2.0;
+            let ox = OBSTACLE_TILE_SIZE * ((i - num_tiles_x / 2) as f32) + OBSTACLE_TILE_SIZE / 2.0;
+            let oy = OBSTACLE_TILE_SIZE * ((num_tiles_y / 2 - j) as f32) - OBSTACLE_TILE_SIZE / 2.0;
             if noise.get([ox as f64, oy as f64]) < map_generator.threshold {
                 continue;
             }
-            commands
-                .spawn_bundle(SpriteBundle {
-                    transform: Transform {
-                        translation: Vec3::new(ox, oy, 0.0),
-                        scale: Vec3::new(obstacle_tile_size, obstacle_tile_size, 1.0),
-                        ..Default::default()
-                    },
-                    sprite: Sprite {
-                        color: obstacle_color,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .insert(Collider::Solid)
-                .insert(Obstacle {});
+            spawn_obstacle(ox, oy, &mut commands);
         }
     }
+}
+
+fn spawn_obstacle(x: f32, y: f32, commands: &mut Commands) {
+    let obstacle_color = Color::rgb(0.65, 0.16, 0.16);
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(x, y, 0.0),
+                scale: Vec3::new(OBSTACLE_TILE_SIZE, OBSTACLE_TILE_SIZE, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: obstacle_color,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Collider::Solid)
+        .insert(Obstacle {});
 }
 
 fn ant_collision_system(
