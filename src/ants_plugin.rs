@@ -54,13 +54,13 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     config.entries.insert("map.octaves", ConfigValue::Int(4));
     config
         .entries
-        .insert("map.frequency", ConfigValue::Float(0.01));
+        .insert("map.frequency", ConfigValue::Float(0.005));
     config
         .entries
         .insert("map.lacunarity", ConfigValue::Float(1.0));
     config
         .entries
-        .insert("map.persistence", ConfigValue::Float(0.25));
+        .insert("map.persistence", ConfigValue::Float(0.2));
     config
         .entries
         .insert("map.threshold", ConfigValue::Float(0.4));
