@@ -168,12 +168,23 @@ fn mouse_input_system(
     buttons: Res<Input<MouseButton>>,
     windows: Res<Windows>,
     transform_query: Query<&Transform, With<Camera>>,
+    collider_query: Query<(Entity, &Collider, &Transform), Without<Ant>>,
 ) {
-    if buttons.pressed(MouseButton::Left) {
-        let window = windows.get_primary().unwrap();
-        if let Some(cursor_pos) = window.cursor_position() {
-            let world_cursor_pos = window_to_world(cursor_pos, window, transform_query.single());
+    let window = windows.get_primary().unwrap();
+    if let Some(cursor_pos) = window.cursor_position() {
+        let world_cursor_pos = window_to_world(cursor_pos, window, transform_query.single());
+        if buttons.pressed(MouseButton::Left) {
             spawn_obstacle(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+        } else if buttons.pressed(MouseButton::Right) {
+            for (entity, _collider, transform) in collider_query.iter() {
+                if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
+                    && world_cursor_pos.x < transform.translation.x + transform.scale.x / 2.0
+                    && world_cursor_pos.y > transform.translation.y - transform.scale.y / 2.0
+                    && world_cursor_pos.y < transform.translation.y + transform.scale.y / 2.0
+                {
+                    commands.entity(entity).despawn();
+                }
+            }
         }
     }
 }
