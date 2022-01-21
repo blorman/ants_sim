@@ -7,6 +7,7 @@ use bevy::{
 };
 use noise::{HybridMulti, MultiFractal, NoiseFn};
 use rand::prelude::random;
+use std::collections::HashSet;
 
 pub struct AntsPlugin;
 
@@ -18,6 +19,8 @@ const OBSTACLE_TILE_SIZE: f32 = 10.0;
 const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
 const FOOD_SIZE: f32 = 5.0;
 const FOOD_COLOR: Color = Color::rgb(0.0, 0.65, 0.0);
+const HOME_COLOR: Color = Color::rgb(1.0, 1.0, 0.62);
+const HOME_SIZE: f32 = 10.0;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
@@ -30,7 +33,8 @@ impl Plugin for AntsPlugin {
                 SystemSet::new()
                     .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
                     .with_system(mouse_input_system)
-                    .with_system(ant_collision_system)
+                    .with_system(obstacle_collision_system)
+                    .with_system(food_collision_system)
                     .with_system(ant_movement_system)
                     .with_system(map_generator_system),
             );
@@ -49,6 +53,7 @@ enum Collider {
 enum Icon {
     SpawnObstacle,
     SpawnFood,
+    SpawnHome,
 }
 
 #[derive(Component)]
@@ -56,6 +61,9 @@ struct Obstacle {}
 
 #[derive(Component)]
 struct Food {}
+
+#[derive(Component)]
+struct Home {}
 
 #[derive(Default)]
 struct MapGenerator {
@@ -201,6 +209,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
             ..Default::default()
         })
         .insert(Icon::SpawnFood);
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(-BOUNDS_X / 2.0 - 50.0, BOUNDS_Y / 2.0 - 105.0, 0.0),
+                scale: Vec3::new(40.0, 40.0, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: HOME_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Icon::SpawnHome);
 }
 
 fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
@@ -241,6 +263,7 @@ fn mouse_input_system(
     mut editor_input: ResMut<EditorInput>,
     transform_query: Query<&Transform, With<Camera>>,
     collider_query: Query<(Entity, &Collider, &Transform), Without<Ant>>,
+    home_query: Query<(Entity, &Home, &Transform), Without<Ant>>,
     food_query: Query<(Entity, &Food, &Transform)>,
     icon_query: Query<(&Icon, &Transform)>,
 ) {
@@ -275,9 +298,29 @@ fn mouse_input_system(
                 }
                 Some(Icon::SpawnFood) => {
                     if buttons.pressed(MouseButton::Left) {
-                        spawn_food(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                        if !food_query.iter().any(|(_, _, transform)| {
+                            pos_in_transform(&world_cursor_pos, &transform)
+                        }) {
+                            spawn_food(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                        }
                     } else if buttons.pressed(MouseButton::Right) {
                         for (entity, _food, transform) in food_query.iter() {
+                            if pos_in_transform(&world_cursor_pos, &transform) {
+                                commands.entity(entity).despawn();
+                            }
+                        }
+                    }
+                }
+                Some(Icon::SpawnHome) => {
+                    if buttons.pressed(MouseButton::Left) {
+                        let tile_center = to_tile_center(world_cursor_pos, OBSTACLE_TILE_SIZE);
+                        if !home_query.iter().any(|(_, _, transform)| {
+                            pos_in_transform(&world_cursor_pos, &transform)
+                        }) {
+                            spawn_home(tile_center, &mut commands);
+                        }
+                    } else if buttons.pressed(MouseButton::Right) {
+                        for (entity, _home, transform) in home_query.iter() {
                             if pos_in_transform(&world_cursor_pos, &transform) {
                                 commands.entity(entity).despawn();
                             }
@@ -320,7 +363,6 @@ fn map_generator_system(
     }
 
     // obstacles
-    let bounds = Vec2::new(900.0, 600.0);
     let num_tiles_x = (BOUNDS_X / OBSTACLE_TILE_SIZE) as i32;
     let num_tiles_y = (BOUNDS_Y / OBSTACLE_TILE_SIZE) as i32;
     for i in 0..num_tiles_x {
@@ -370,7 +412,24 @@ fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
         .insert(Food {});
 }
 
-fn ant_collision_system(
+fn spawn_home(pos: Vec3, commands: &mut Commands) {
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: pos,
+                scale: Vec3::new(HOME_SIZE, HOME_SIZE, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: HOME_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Home {});
+}
+
+fn obstacle_collision_system(
     mut ant_query: Query<(&Ant, &mut Transform), Without<Collider>>,
     collider_query: Query<(&Collider, &Transform), Without<Ant>>,
 ) {
@@ -416,6 +475,51 @@ fn ant_collision_system(
                         let clamped_direction = Vec3::new(direction.x, -direction.y * 0.1, 0.0);
                         let angle = vec3_angle(clamped_direction);
                         ant_transform.rotation = Quat::from_rotation_z(angle);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn food_collision_system(
+    mut commands: Commands,
+    ant_query: Query<(Entity, Option<&Children>, &Ant, &Transform), Without<Food>>,
+    mut available_food_query: Query<
+        (Entity, &Food, &mut Transform),
+        (Without<Parent>, Without<Ant>),
+    >,
+    home_query: Query<(Entity, &Home, &Transform), (Without<Ant>, Without<Food>)>,
+) {
+    let mut taken_food: HashSet<u32> = HashSet::new();
+    for (ant_entity, maybe_children, _ant, ant_transform) in ant_query.iter() {
+        match maybe_children {
+            Some(children) if children.len() > 0 => {
+                // returning: check collision with home
+                for (_home_entity, _home, transform) in home_query.iter() {
+                    let a = ant_transform.translation.x - transform.translation.x;
+                    let b = ant_transform.translation.y - transform.translation.y;
+                    if a * a + b * b < HOME_SIZE * HOME_SIZE {
+                        for &child in children.iter() {
+                            commands.entity(child).despawn_recursive();
+                        }
+                    }
+                }
+            }
+            _ => {
+                // hunting: check collision with food
+                for (food_entity, _food, mut transform) in available_food_query.iter_mut() {
+                    if taken_food.contains(&food_entity.id()) {
+                        continue;
+                    }
+                    let a = ant_transform.translation.x - transform.translation.x;
+                    let b = ant_transform.translation.y - transform.translation.y;
+                    if a * a + b * b < FOOD_SIZE * FOOD_SIZE {
+                        transform.scale = Vec3::new(1.0, 1.0, 1.0);
+                        transform.translation = Vec3::new(1.0, 0.0, 0.0);
+                        commands.entity(ant_entity).push_children(&[food_entity]);
+                        taken_food.insert(food_entity.id());
+                        break;
                     }
                 }
             }
