@@ -11,6 +11,8 @@ use rand::prelude::random;
 pub struct AntsPlugin;
 
 const TIME_STEP: f32 = 1.0 / 60.0;
+const BOUNDS_X: f32 = 900.0;
+const BOUNDS_Y: f32 = 600.0;
 const ANT_RANDOM_WANDERING: f32 = 0.5;
 const OBSTACLE_TILE_SIZE: f32 = 10.0;
 const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
@@ -108,14 +110,13 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     // Add walls
     let wall_color = Color::rgb(0.8, 0.8, 0.8);
     let wall_thickness = 10.0;
-    let bounds = Vec2::new(900.0, 600.0);
 
     // left
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(-(bounds.x + wall_thickness) / 2.0, 0.0, 0.0),
-                scale: Vec3::new(wall_thickness, bounds.y + wall_thickness * 2.0, 1.0),
+                translation: Vec3::new(-(BOUNDS_X + wall_thickness) / 2.0, 0.0, 0.0),
+                scale: Vec3::new(wall_thickness, BOUNDS_Y + wall_thickness * 2.0, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -129,8 +130,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new((bounds.x + wall_thickness) / 2.0, 0.0, 0.0),
-                scale: Vec3::new(wall_thickness, bounds.y + wall_thickness * 2.0, 1.0),
+                translation: Vec3::new((BOUNDS_X + wall_thickness) / 2.0, 0.0, 0.0),
+                scale: Vec3::new(wall_thickness, BOUNDS_Y + wall_thickness * 2.0, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -144,8 +145,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(0.0, -(bounds.y + wall_thickness) / 2.0, 0.0),
-                scale: Vec3::new(bounds.x + wall_thickness * 2.0, wall_thickness, 1.0),
+                translation: Vec3::new(0.0, -(BOUNDS_Y + wall_thickness) / 2.0, 0.0),
+                scale: Vec3::new(BOUNDS_X + wall_thickness * 2.0, wall_thickness, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -159,8 +160,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(0.0, (bounds.y + wall_thickness) / 2.0, 0.0),
-                scale: Vec3::new(bounds.x + wall_thickness * 2.0, wall_thickness, 1.0),
+                translation: Vec3::new(0.0, (BOUNDS_Y + wall_thickness) / 2.0, 0.0),
+                scale: Vec3::new(BOUNDS_X + wall_thickness * 2.0, wall_thickness, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -175,7 +176,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(-bounds.x / 2.0 - 50.0, bounds.y / 2.0 - 15.0, 0.0),
+                translation: Vec3::new(-BOUNDS_X / 2.0 - 50.0, BOUNDS_Y / 2.0 - 15.0, 0.0),
                 scale: Vec3::new(40.0, 40.0, 1.0),
                 ..Default::default()
             },
@@ -189,7 +190,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(-bounds.x / 2.0 - 50.0, bounds.y / 2.0 - 60.0, 0.0),
+                translation: Vec3::new(-BOUNDS_X / 2.0 - 50.0, BOUNDS_Y / 2.0 - 60.0, 0.0),
                 scale: Vec3::new(40.0, 40.0, 1.0),
                 ..Default::default()
             },
@@ -219,6 +220,20 @@ fn to_tile_center(world_pos: Vec3, grid_size: f32) -> Vec3 {
     )
 }
 
+fn pos_in_transform(pos: &Vec3, transform: &Transform) -> bool {
+    pos.x > transform.translation.x - transform.scale.x / 2.0
+        && pos.x < transform.translation.x + transform.scale.x / 2.0
+        && pos.y > transform.translation.y - transform.scale.y / 2.0
+        && pos.y < transform.translation.y + transform.scale.y / 2.0
+}
+
+fn pos_in_bounds(pos: &Vec3) -> bool {
+    pos.x < BOUNDS_X / 2.0
+        && pos.x > -BOUNDS_X / 2.0
+        && pos.y < BOUNDS_Y / 2.0
+        && pos.y > -BOUNDS_Y / 2.0
+}
+
 fn mouse_input_system(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
@@ -235,55 +250,42 @@ fn mouse_input_system(
 
         if buttons.just_pressed(MouseButton::Left) {
             for (icon, transform) in icon_query.iter() {
-                if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
-                    && world_cursor_pos.x < transform.translation.x + transform.scale.x / 2.0
-                    && world_cursor_pos.y > transform.translation.y - transform.scale.y / 2.0
-                    && world_cursor_pos.y < transform.translation.y + transform.scale.y / 2.0
-                {
+                if pos_in_transform(&world_cursor_pos, &transform) {
                     editor_input.selected_icon = Some(*icon);
                 }
             }
         }
-
-        match editor_input.selected_icon {
-            Some(Icon::SpawnObstacle) => {
-                if buttons.pressed(MouseButton::Left) {
-                    let tile_center = to_tile_center(world_cursor_pos, OBSTACLE_TILE_SIZE);
-                    spawn_obstacle(tile_center, &mut commands);
-                } else if buttons.pressed(MouseButton::Right) {
-                    for (entity, _collider, transform) in collider_query.iter() {
-                        if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
-                            && world_cursor_pos.x
-                                < transform.translation.x + transform.scale.x / 2.0
-                            && world_cursor_pos.y
-                                > transform.translation.y - transform.scale.y / 2.0
-                            && world_cursor_pos.y
-                                < transform.translation.y + transform.scale.y / 2.0
-                        {
-                            commands.entity(entity).despawn();
+        if pos_in_bounds(&world_cursor_pos) {
+            match editor_input.selected_icon {
+                Some(Icon::SpawnObstacle) => {
+                    if buttons.pressed(MouseButton::Left) {
+                        let tile_center = to_tile_center(world_cursor_pos, OBSTACLE_TILE_SIZE);
+                        if !collider_query.iter().any(|(_, _, transform)| {
+                            pos_in_transform(&world_cursor_pos, &transform)
+                        }) {
+                            spawn_obstacle(tile_center, &mut commands);
+                        }
+                    } else if buttons.pressed(MouseButton::Right) {
+                        for (entity, _collider, transform) in collider_query.iter() {
+                            if pos_in_transform(&world_cursor_pos, &transform) {
+                                commands.entity(entity).despawn();
+                            }
                         }
                     }
                 }
-            }
-            Some(Icon::SpawnFood) => {
-                if buttons.pressed(MouseButton::Left) {
-                    spawn_food(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
-                } else if buttons.pressed(MouseButton::Right) {
-                    for (entity, _food, transform) in food_query.iter() {
-                        if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
-                            && world_cursor_pos.x
-                                < transform.translation.x + transform.scale.x / 2.0
-                            && world_cursor_pos.y
-                                > transform.translation.y - transform.scale.y / 2.0
-                            && world_cursor_pos.y
-                                < transform.translation.y + transform.scale.y / 2.0
-                        {
-                            commands.entity(entity).despawn();
+                Some(Icon::SpawnFood) => {
+                    if buttons.pressed(MouseButton::Left) {
+                        spawn_food(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                    } else if buttons.pressed(MouseButton::Right) {
+                        for (entity, _food, transform) in food_query.iter() {
+                            if pos_in_transform(&world_cursor_pos, &transform) {
+                                commands.entity(entity).despawn();
+                            }
                         }
                     }
                 }
+                None => (),
             }
-            None => (),
         }
     }
 }
@@ -319,8 +321,8 @@ fn map_generator_system(
 
     // obstacles
     let bounds = Vec2::new(900.0, 600.0);
-    let num_tiles_x = (bounds.x / OBSTACLE_TILE_SIZE) as i32;
-    let num_tiles_y = (bounds.y / OBSTACLE_TILE_SIZE) as i32;
+    let num_tiles_x = (BOUNDS_X / OBSTACLE_TILE_SIZE) as i32;
+    let num_tiles_y = (BOUNDS_Y / OBSTACLE_TILE_SIZE) as i32;
     for i in 0..num_tiles_x {
         for j in 0..num_tiles_y {
             let ox = OBSTACLE_TILE_SIZE * ((i - num_tiles_x / 2) as f32) + OBSTACLE_TILE_SIZE / 2.0;
