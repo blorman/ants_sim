@@ -114,8 +114,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(-bounds.x / 2.0, 0.0, 0.0),
-                scale: Vec3::new(wall_thickness, bounds.y + wall_thickness, 1.0),
+                translation: Vec3::new(-(bounds.x + wall_thickness) / 2.0, 0.0, 0.0),
+                scale: Vec3::new(wall_thickness, bounds.y + wall_thickness * 2.0, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -129,8 +129,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(bounds.x / 2.0, 0.0, 0.0),
-                scale: Vec3::new(wall_thickness, bounds.y + wall_thickness, 1.0),
+                translation: Vec3::new((bounds.x + wall_thickness) / 2.0, 0.0, 0.0),
+                scale: Vec3::new(wall_thickness, bounds.y + wall_thickness * 2.0, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -144,8 +144,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(0.0, -bounds.y / 2.0, 0.0),
-                scale: Vec3::new(bounds.x + wall_thickness, wall_thickness, 1.0),
+                translation: Vec3::new(0.0, -(bounds.y + wall_thickness) / 2.0, 0.0),
+                scale: Vec3::new(bounds.x + wall_thickness * 2.0, wall_thickness, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -159,8 +159,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(0.0, bounds.y / 2.0, 0.0),
-                scale: Vec3::new(bounds.x + wall_thickness, wall_thickness, 1.0),
+                translation: Vec3::new(0.0, (bounds.y + wall_thickness) / 2.0, 0.0),
+                scale: Vec3::new(bounds.x + wall_thickness * 2.0, wall_thickness, 1.0),
                 ..Default::default()
             },
             sprite: Sprite {
@@ -211,6 +211,14 @@ fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 
     *camera * norm
 }
 
+fn to_tile_center(world_pos: Vec3, grid_size: f32) -> Vec3 {
+    Vec3::new(
+        (world_pos.x / grid_size).floor() * grid_size + grid_size / 2.0,
+        (world_pos.y / grid_size).floor() * grid_size + grid_size / 2.0,
+        0.0,
+    )
+}
+
 fn mouse_input_system(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
@@ -240,7 +248,8 @@ fn mouse_input_system(
         match editor_input.selected_icon {
             Some(Icon::SpawnObstacle) => {
                 if buttons.pressed(MouseButton::Left) {
-                    spawn_obstacle(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                    let tile_center = to_tile_center(world_cursor_pos, OBSTACLE_TILE_SIZE);
+                    spawn_obstacle(tile_center, &mut commands);
                 } else if buttons.pressed(MouseButton::Right) {
                     for (entity, _collider, transform) in collider_query.iter() {
                         if world_cursor_pos.x > transform.translation.x - transform.scale.x / 2.0
@@ -319,16 +328,16 @@ fn map_generator_system(
             if noise.get([ox as f64, oy as f64]) < map_generator.threshold {
                 continue;
             }
-            spawn_obstacle(ox, oy, &mut commands);
+            spawn_obstacle(Vec3::new(ox, oy, 0.0), &mut commands);
         }
     }
 }
 
-fn spawn_obstacle(x: f32, y: f32, commands: &mut Commands) {
+fn spawn_obstacle(pos: Vec3, commands: &mut Commands) {
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(x, y, 0.0),
+                translation: pos,
                 scale: Vec3::new(OBSTACLE_TILE_SIZE, OBSTACLE_TILE_SIZE, 1.0),
                 ..Default::default()
             },
