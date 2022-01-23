@@ -1,5 +1,6 @@
 use crate::console_debug_plugin::Config;
 use crate::console_debug_plugin::ConfigValue;
+use bevy::utils::Duration;
 use bevy::{
     core::FixedTimestep,
     prelude::*,
@@ -19,14 +20,17 @@ const OBSTACLE_TILE_SIZE: f32 = 10.0;
 const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
 const FOOD_SIZE: f32 = 5.0;
 const FOOD_COLOR: Color = Color::rgb(0.0, 0.65, 0.0);
-const HOME_COLOR: Color = Color::rgb(1.0, 1.0, 0.62);
+const TRAIL_SIZE: f32 = 2.5;
+const TRAIL_COLOR: Color = Color::rgb(0.65, 0.0, 0.5);
 const HOME_SIZE: f32 = 10.0;
+const HOME_COLOR: Color = Color::rgb(1.0, 1.0, 0.62);
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Config>()
             .init_resource::<MapGenerator>()
             .init_resource::<EditorInput>()
+            .insert_resource(TrailSpawnTimer(Timer::from_seconds(2.0, true)))
             .add_startup_system(setup.label("setup"))
             .add_startup_system(map_generator_system.after("setup"))
             .add_system_set(
@@ -36,6 +40,8 @@ impl Plugin for AntsPlugin {
                     .with_system(obstacle_collision_system)
                     .with_system(food_collision_system)
                     .with_system(ant_movement_system)
+                    .with_system(trail_spawn_system)
+                    .with_system(trail_decay_system)
                     .with_system(map_generator_system),
             );
     }
@@ -61,6 +67,13 @@ struct Obstacle {}
 
 #[derive(Component)]
 struct Food {}
+
+#[derive(Component)]
+struct Trail {
+    strength: f32,
+}
+
+struct TrailSpawnTimer(Timer);
 
 #[derive(Component)]
 struct Home {}
@@ -94,6 +107,15 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     config
         .entries
         .insert("map.threshold", ConfigValue::Float(0.4));
+    config
+        .entries
+        .insert("trail.spawn_duration", ConfigValue::Float(0.5));
+    config
+        .entries
+        .insert("trail.initial_strength", ConfigValue::Float(1.0));
+    config
+        .entries
+        .insert("trail.decay_rate", ConfigValue::Float(0.999));
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
     for _ in 0..100 {
@@ -412,6 +434,25 @@ fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
         .insert(Food {});
 }
 
+fn spawn_trail(pos: Vec3, commands: &mut Commands, initial_strength: f32) {
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: pos,
+                scale: Vec3::new(TRAIL_SIZE, TRAIL_SIZE, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                color: TRAIL_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Trail {
+            strength: initial_strength,
+        });
+}
+
 fn spawn_home(pos: Vec3, commands: &mut Commands) {
     commands
         .spawn_bundle(SpriteBundle {
@@ -523,6 +564,49 @@ fn food_collision_system(
                     }
                 }
             }
+        }
+    }
+}
+
+fn trail_spawn_system(
+    mut commands: Commands,
+    config: Res<Config>,
+    mut timer: ResMut<TrailSpawnTimer>,
+    query: Query<&Transform, With<Ant>>,
+) {
+    if timer.0.duration().as_secs_f32() != config.entries["trail.spawn_duration"].f32() {
+        timer.0.set_duration(Duration::from_secs_f32(
+            config.entries["trail.spawn_duration"].f32(),
+        ));
+    }
+
+    if timer
+        .0
+        .tick(Duration::from_secs_f32(TIME_STEP))
+        .just_finished()
+    {
+        for transform in query.iter() {
+            spawn_trail(
+                transform.translation,
+                &mut commands,
+                config.entries["trail.initial_strength"].f32(),
+            );
+        }
+    }
+}
+
+fn trail_decay_system(
+    mut commands: Commands,
+    config: Res<Config>,
+    mut query: Query<(Entity, &mut Trail, &mut Sprite)>,
+) {
+    let initial_strength = config.entries["trail.initial_strength"].f32();
+    let decay_rate = config.entries["trail.decay_rate"].f32();
+    for (entity, mut trail, mut sprite) in query.iter_mut() {
+        trail.strength = trail.strength * decay_rate;
+        sprite.color = Color::rgb(0.65, 0.0, 1.0 - trail.strength / initial_strength / 2.0);
+        if trail.strength < 0.01 {
+            commands.entity(entity).despawn();
         }
     }
 }
