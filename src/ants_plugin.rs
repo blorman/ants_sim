@@ -1,6 +1,5 @@
 use crate::console_debug_plugin::Config;
 use crate::console_debug_plugin::ConfigValue;
-use bevy::utils::Duration;
 use bevy::{
     core::FixedTimestep,
     prelude::*,
@@ -8,6 +7,9 @@ use bevy::{
 };
 use noise::{HybridMulti, MultiFractal, NoiseFn};
 use rand::prelude::random;
+use rand::Rng;
+use rand_chacha::rand_core::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 
 pub struct AntsPlugin;
@@ -30,7 +32,6 @@ impl Plugin for AntsPlugin {
         app.init_resource::<Config>()
             .init_resource::<MapGenerator>()
             .init_resource::<EditorInput>()
-            .insert_resource(TrailSpawnTimer(Timer::from_seconds(2.0, true)))
             .add_startup_system(setup.label("setup"))
             .add_startup_system(map_generator_system.after("setup"))
             .add_system(mouse_input_system)
@@ -73,8 +74,6 @@ struct Trail {
     strength: f32,
 }
 
-struct TrailSpawnTimer(Timer);
-
 #[derive(Component)]
 struct Home {}
 
@@ -109,7 +108,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
         .insert("map.threshold", ConfigValue::Float(0.4));
     config
         .entries
-        .insert("trail.spawn_duration", ConfigValue::Float(0.5));
+        .insert("trail.spawn_period", ConfigValue::Float(0.5));
     config
         .entries
         .insert("trail.initial_strength", ConfigValue::Float(1.0));
@@ -570,22 +569,17 @@ fn food_collision_system(
 
 fn trail_spawn_system(
     mut commands: Commands,
+    mut current_frame: Local<usize>,
     config: Res<Config>,
-    mut timer: ResMut<TrailSpawnTimer>,
-    query: Query<&Transform, With<Ant>>,
+    query: Query<(Entity, &Transform), With<Ant>>,
 ) {
-    if timer.0.duration().as_secs_f32() != config.entries["trail.spawn_duration"].f32() {
-        timer.0.set_duration(Duration::from_secs_f32(
-            config.entries["trail.spawn_duration"].f32(),
-        ));
-    }
-
-    if timer
-        .0
-        .tick(Duration::from_secs_f32(TIME_STEP))
-        .just_finished()
-    {
-        for transform in query.iter() {
+    let trail_spawn_period = config.entries["trail.spawn_period"].f32();
+    let spawn_period_frames = (trail_spawn_period / TIME_STEP) as usize;
+    let current_spawn_frame = *current_frame % spawn_period_frames;
+    for (entity, transform) in query.iter() {
+        let mut rng = ChaCha8Rng::seed_from_u64(entity.id() as u64);
+        let ant_spawn_frame_offset = rng.gen::<usize>() % spawn_period_frames;
+        if ant_spawn_frame_offset == current_spawn_frame {
             spawn_trail(
                 transform.translation,
                 &mut commands,
@@ -593,6 +587,7 @@ fn trail_spawn_system(
             );
         }
     }
+    *current_frame += 1;
 }
 
 fn trail_decay_system(
