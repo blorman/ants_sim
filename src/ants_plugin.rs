@@ -17,7 +17,8 @@ pub struct AntsPlugin;
 const TIME_STEP: f32 = 1.0 / 60.0;
 const BOUNDS_X: f32 = 900.0;
 const BOUNDS_Y: f32 = 600.0;
-const ANT_RANDOM_WANDERING: f32 = 0.5;
+// TODO: move to config
+const ANT_RANDOM_WANDERING: f32 = 0.02 * std::f32::consts::PI;
 const OBSTACLE_TILE_SIZE: f32 = 10.0;
 const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
 const FOOD_SIZE: f32 = 5.0;
@@ -26,6 +27,8 @@ const TRAIL_SIZE: f32 = 2.5;
 const TRAIL_COLOR: Color = Color::rgb(0.65, 0.0, 0.5);
 const HOME_SIZE: f32 = 10.0;
 const HOME_COLOR: Color = Color::rgb(1.0, 1.0, 0.62);
+// TODO: fix ant size and scale
+const ANT_SIZE: f32 = 5.0;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
@@ -92,7 +95,7 @@ struct EditorInput {
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
-    config.entries.insert("ant.speed", ConfigValue::Float(50.0));
+    config.entries.insert("ant.speed", ConfigValue::Float(40.0));
     config.entries.insert("map.octaves", ConfigValue::Int(4));
     config
         .entries
@@ -108,22 +111,35 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
         .insert("map.threshold", ConfigValue::Float(0.4));
     config
         .entries
-        .insert("trail.spawn_period", ConfigValue::Float(0.5));
+        .insert("trail.spawn_period", ConfigValue::Float(0.25));
     config
         .entries
         .insert("trail.initial_strength", ConfigValue::Float(1.0));
     config
         .entries
         .insert("trail.decay_rate", ConfigValue::Float(0.999));
+    config.entries.insert(
+        "sensor_angle",
+        ConfigValue::Float(std::f32::consts::PI / 4.0),
+    );
+    config
+        .entries
+        .insert("sensor_distance", ConfigValue::Float(20.0));
+    config
+        .entries
+        .insert("sensor_radius", ConfigValue::Float(7.66));
+    config
+        .entries
+        .insert("sensor_turning_coefficient", ConfigValue::Float(1.0));
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
-    for _ in 0..100 {
+    for _ in 0..10 {
         commands
             .spawn_bundle(SpriteBundle {
                 texture: asset_server.load("ant.png"),
                 transform: Transform {
-                    scale: Vec3::new(5.0, 5.0, 0.0),
-                    translation: Vec3::new(0.0, -50.0, 1.0),
+                    scale: Vec3::new(ANT_SIZE, ANT_SIZE, 0.0),
+                    translation: Vec3::new(0.0, -50.0, 0.0),
                     rotation: Quat::from_rotation_z(random::<f32>() * 2.0 * std::f32::consts::PI),
                     ..Default::default()
                 },
@@ -244,6 +260,33 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
             ..Default::default()
         })
         .insert(Icon::SpawnHome);
+
+    // spawn some test trails
+    for _ in 0..1 {
+        let foo = Vec3::new(9.0, 6.0, 0.0).normalize() * 25.0 * random::<f32>();
+        let mut pos = Vec3::new(-450.0, -300.0, 0.0) + foo;
+        while pos.x <= 450.0 && pos.y <= 300.0 {
+            spawn_trail(
+                pos,
+                &mut commands,
+                config.entries["trail.initial_strength"].f32(),
+            );
+            pos += Vec3::new(9.0, 6.0, 0.0).normalize() * 10.0;
+        }
+    }
+    for _ in 0..5 {
+        let step = Vec3::new(9.0, -6.0, 0.0).normalize() * 10.0;
+        let foo = step * random::<f32>();
+        let mut pos = Vec3::new(-450.0, 300.0, 0.0) + foo;
+        while pos.x <= 450.0 && pos.y >= -300.0 {
+            spawn_trail(
+                pos,
+                &mut commands,
+                config.entries["trail.initial_strength"].f32(),
+            );
+            pos += step;
+        }
+    }
 }
 
 fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
@@ -615,13 +658,51 @@ fn vec3_angle(v: Vec3) -> f32 {
     }
 }
 
-fn ant_movement_system(mut query: Query<&mut Transform, With<Ant>>, config: Res<Config>) {
-    for mut transform in query.iter_mut() {
-        let velocity = transform.rotation * Vec3::X * config.entries["ant.speed"].f32();
-        transform.translation += velocity * TIME_STEP;
+fn ant_movement_system(
+    mut ant_query: Query<&mut Transform, (With<Ant>, Without<Trail>)>,
+    trail_query: Query<(&Trail, &Transform), Without<Ant>>,
+    config: Res<Config>,
+) {
+    let sensor_angle = config.entries["sensor_angle"].f32();
+    let sensor_distance = config.entries["sensor_distance"].f32();
+    let sensor_radius = config.entries["sensor_radius"].f32();
+    let sensor_turning_coefficient = config.entries["sensor_turning_coefficient"].f32();
+    let mut sensor_magnitudes = [0.0, 0.0, 0.0];
+    let sensor_base_pos = Vec3::new(1.0 / ANT_SIZE, 0.0, 0.0) * sensor_distance;
+    let sensor_positions = [
+        Quat::from_rotation_z(sensor_angle) * sensor_base_pos,
+        sensor_base_pos,
+        Quat::from_rotation_z(-sensor_angle) * sensor_base_pos,
+    ];
+    for mut ant_transform in ant_query.iter_mut() {
+        let velocity = ant_transform.rotation * Vec3::X * config.entries["ant.speed"].f32();
+        ant_transform.translation += velocity * TIME_STEP;
 
         let angle = vec3_angle(velocity);
-        let wandering_angle_delta = ANT_RANDOM_WANDERING * (random::<f32>() - 0.5);
-        transform.rotation = Quat::from_rotation_z(angle + wandering_angle_delta);
+        let wandering_angle_delta = ANT_RANDOM_WANDERING * (random::<f32>() * 2.0 - 1.0);
+
+        let t_sensor_positions = [
+            ant_transform.mul_vec3(sensor_positions[0]),
+            ant_transform.mul_vec3(sensor_positions[1]),
+            ant_transform.mul_vec3(sensor_positions[2]),
+        ];
+        for (trail, trail_transform) in trail_query.iter() {
+            for (i, s_pos) in t_sensor_positions.iter().enumerate() {
+                if (trail_transform.translation - *s_pos).length() < sensor_radius {
+                    sensor_magnitudes[i] += trail.strength;
+                }
+            }
+        }
+        let turning_direction = sensor_positions[0] * sensor_magnitudes[0]
+            + sensor_positions[1] * sensor_magnitudes[1]
+            + sensor_positions[2] * sensor_magnitudes[2];
+
+        let turning_angle_delta = if turning_direction.length() > 0.0 {
+            vec3_angle(turning_direction) * sensor_turning_coefficient
+        } else {
+            0.0
+        };
+        ant_transform.rotation =
+            Quat::from_rotation_z(angle + turning_angle_delta + wandering_angle_delta);
     }
 }
