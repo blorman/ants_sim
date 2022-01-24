@@ -33,16 +33,16 @@ impl Plugin for AntsPlugin {
             .insert_resource(TrailSpawnTimer(Timer::from_seconds(2.0, true)))
             .add_startup_system(setup.label("setup"))
             .add_startup_system(map_generator_system.after("setup"))
+            .add_system(mouse_input_system)
+            .add_system(map_generator_system)
             .add_system_set(
                 SystemSet::new()
                     .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                    .with_system(mouse_input_system)
                     .with_system(obstacle_collision_system)
                     .with_system(food_collision_system)
                     .with_system(ant_movement_system)
                     .with_system(trail_spawn_system)
-                    .with_system(trail_decay_system)
-                    .with_system(map_generator_system),
+                    .with_system(trail_decay_system),
             );
     }
 }
