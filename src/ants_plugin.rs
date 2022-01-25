@@ -3,8 +3,10 @@ use crate::console_debug_plugin::ConfigValue;
 use bevy::{
     core::FixedTimestep,
     prelude::*,
+    render::render_resource::TextureUsages,
     sprite::collide_aabb::{collide, Collision},
 };
+use bevy_ecs_tilemap::prelude::*;
 use noise::{HybridMulti, MultiFractal, NoiseFn};
 use rand::prelude::random;
 use rand::Rng;
@@ -33,13 +35,15 @@ const ANT_SIZE: f32 = 5.0;
 
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Config>()
+        app.add_plugin(TilemapPlugin)
+            .init_resource::<Config>()
             .init_resource::<MapGenerator>()
             .init_resource::<EditorInput>()
             .add_startup_system(setup.label("setup"))
             .add_startup_system(map_generator_system.after("setup"))
             .add_system(mouse_input_system)
             .add_system(map_generator_system)
+            .add_system(set_texture_filters_to_nearest)
             .add_system_set(
                 SystemSet::new()
                     .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
@@ -104,7 +108,12 @@ struct EditorInput {
     selected_icon: Option<Icon>,
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut config: ResMut<Config>,
+    mut map_query: MapQuery,
+) {
     config.entries.insert("ant.speed", ConfigValue::Float(40.0));
     config.entries.insert("map.octaves", ConfigValue::Int(4));
     config
@@ -143,6 +152,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
         .insert("sensor_turning_coefficient", ConfigValue::Float(1.0));
 
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+
+    // spawn ants
     for _ in 0..10 {
         commands
             .spawn_bundle(SpriteBundle {
@@ -321,6 +332,62 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     //         pos += step;
     //     }
     // }
+
+    let texture_handle = asset_server.load("tiles_10.png");
+
+    // Create map entity and component:
+    let map_entity = commands.spawn().id();
+    let mut map = Map::new(0u16, map_entity);
+
+    let layer_settings = LayerSettings::new(
+        MapSize((BOUNDS_X / 100.0) as u32, (BOUNDS_Y / 100.0) as u32),
+        ChunkSize(10, 10),
+        TileSize(10.0, 10.0),
+        TextureSize(60.0, 10.0),
+    );
+
+    // Creates a new layer builder with a layer entity.
+    let (mut layer_builder, _) = LayerBuilder::new(&mut commands, layer_settings, 0u16, 0u16);
+
+    // // Build all tiles
+    // layer_builder.set_all(TileBundle {
+    //     tile: Tile {
+    //         color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
+    //         ..Tile::default()
+    //     },
+    //     ..TileBundle::default()
+    // });
+
+    // Add one tile
+    let _ = layer_builder.set_tile(
+        TilePos(0, 0),
+        TileBundle {
+            tile: Tile {
+                color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
+                ..Tile::default()
+            },
+            ..TileBundle::default()
+        },
+    );
+
+    // Builds the layer.
+    // Note: Once this is called you can no longer edit the layer until a hard sync in bevy.
+    let layer_entity = map_query.build_layer(&mut commands, layer_builder, texture_handle);
+
+    // Required to keep track of layers for a map internally.
+    map.add_layer(&mut commands, 0u16, layer_entity);
+
+    // Spawn Map
+    // Required in order to use map_query to retrieve layers/tiles.
+    commands
+        .entity(map_entity)
+        .insert(map)
+        .insert(Transform::from_xyz(
+            -layer_settings.get_pixel_center().x,
+            -layer_settings.get_pixel_center().y,
+            0.0,
+        ))
+        .insert(GlobalTransform::default());
 }
 
 fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
@@ -803,5 +870,24 @@ fn ant_movement_system(
         };
         ant_transform.rotation =
             Quat::from_rotation_z(angle + turning_angle_delta + wandering_angle_delta);
+    }
+}
+
+pub fn set_texture_filters_to_nearest(
+    mut texture_events: EventReader<AssetEvent<Image>>,
+    mut textures: ResMut<Assets<Image>>,
+) {
+    // quick and dirty, run this for all textures anytime a texture is created.
+    for event in texture_events.iter() {
+        match event {
+            AssetEvent::Created { handle } => {
+                if let Some(mut texture) = textures.get_mut(handle) {
+                    texture.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING
+                        | TextureUsages::COPY_SRC
+                        | TextureUsages::COPY_DST;
+                }
+            }
+            _ => (),
+        }
     }
 }
