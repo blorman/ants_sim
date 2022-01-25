@@ -528,7 +528,7 @@ fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
 }
 
 fn spawn_food_cluster(pos: Vec3, commands: &mut Commands) {
-    for i in 0..40 {
+    for _ in 0..40 {
         let r = 20.0;
         let food_pos = pos
             + Vec3::new(
