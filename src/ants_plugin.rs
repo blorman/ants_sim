@@ -649,7 +649,7 @@ fn obstacle_collision_system(
 
 fn food_collision_system(
     mut commands: Commands,
-    mut ant_query: Query<(Entity, Option<&Children>, &mut Ant, &Transform), Without<Food>>,
+    mut ant_query: Query<(Entity, Option<&Children>, &mut Ant, &mut Transform), Without<Food>>,
     mut available_food_query: Query<
         (Entity, &Food, &mut Transform),
         (Without<Parent>, Without<Ant>),
@@ -657,7 +657,7 @@ fn food_collision_system(
     home_query: Query<(Entity, &Home, &Transform), (Without<Ant>, Without<Food>)>,
 ) {
     let mut taken_food: HashSet<u32> = HashSet::new();
-    for (ant_entity, maybe_children, mut ant, ant_transform) in ant_query.iter_mut() {
+    for (ant_entity, maybe_children, mut ant, mut ant_transform) in ant_query.iter_mut() {
         match maybe_children {
             Some(children) if children.len() > 0 => {
                 // returning: check collision with home
@@ -669,6 +669,7 @@ fn food_collision_system(
                             commands.entity(child).despawn_recursive();
                         }
                         ant.carrying_food = false;
+                        ant_transform.rotation *= Quat::from_rotation_z(std::f32::consts::PI);
                     }
                 }
             }
@@ -686,6 +687,7 @@ fn food_collision_system(
                         commands.entity(ant_entity).push_children(&[food_entity]);
                         taken_food.insert(food_entity.id());
                         ant.carrying_food = true;
+                        ant_transform.rotation *= Quat::from_rotation_z(std::f32::consts::PI);
                         break;
                     }
                 }
