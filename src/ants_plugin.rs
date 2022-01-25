@@ -24,7 +24,8 @@ const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
 const FOOD_SIZE: f32 = 5.0;
 const FOOD_COLOR: Color = Color::rgb(0.0, 0.65, 0.0);
 const TRAIL_SIZE: f32 = 2.5;
-const TRAIL_COLOR: Color = Color::rgb(0.65, 0.0, 0.5);
+const TRAIL_GOT_FOOD_COLOR: Color = Color::rgb(0.88, 0.18, 0.24);
+const TRAIL_GATHERING_COLOR: Color = Color::rgb(0.28, 0.51, 0.87);
 const HOME_SIZE: f32 = 10.0;
 const HOME_COLOR: Color = Color::rgb(1.0, 1.0, 0.62);
 // TODO: fix ant size and scale
@@ -52,7 +53,9 @@ impl Plugin for AntsPlugin {
 }
 
 #[derive(Component)]
-struct Ant {}
+struct Ant {
+    carrying_food: bool,
+}
 
 #[derive(Component)]
 enum Collider {
@@ -72,8 +75,14 @@ struct Obstacle {}
 #[derive(Component)]
 struct Food {}
 
+enum TrailType {
+    Gathering,
+    GotFood,
+}
+
 #[derive(Component)]
 struct Trail {
+    trail_type: TrailType,
     strength: f32,
 }
 
@@ -149,8 +158,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
                 },
                 ..Default::default()
             })
-            .insert(Ant {});
+            .insert(Ant {
+                carrying_food: false,
+            });
     }
+
+    spawn_home(Vec3::new(0.0, -50.0, 0.0), &mut commands);
 
     // Add walls
     let wall_color = Color::rgb(0.8, 0.8, 0.8);
@@ -261,32 +274,34 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
         })
         .insert(Icon::SpawnHome);
 
-    // spawn some test trails
-    for _ in 0..1 {
-        let foo = Vec3::new(9.0, 6.0, 0.0).normalize() * 25.0 * random::<f32>();
-        let mut pos = Vec3::new(-450.0, -300.0, 0.0) + foo;
-        while pos.x <= 450.0 && pos.y <= 300.0 {
-            spawn_trail(
-                pos,
-                &mut commands,
-                config.entries["trail.initial_strength"].f32(),
-            );
-            pos += Vec3::new(9.0, 6.0, 0.0).normalize() * 10.0;
-        }
-    }
-    for _ in 0..5 {
-        let step = Vec3::new(9.0, -6.0, 0.0).normalize() * 10.0;
-        let foo = step * random::<f32>();
-        let mut pos = Vec3::new(-450.0, 300.0, 0.0) + foo;
-        while pos.x <= 450.0 && pos.y >= -300.0 {
-            spawn_trail(
-                pos,
-                &mut commands,
-                config.entries["trail.initial_strength"].f32(),
-            );
-            pos += step;
-        }
-    }
+    // // spawn some test trails
+    // for _ in 0..1 {
+    //     let foo = Vec3::new(9.0, 6.0, 0.0).normalize() * 25.0 * random::<f32>();
+    //     let mut pos = Vec3::new(-450.0, -300.0, 0.0) + foo;
+    //     while pos.x <= 450.0 && pos.y <= 300.0 {
+    //         spawn_trail(
+    //             pos,
+    //             &mut commands,
+    //             TrailType::Gathering,
+    //             config.entries["trail.initial_strength"].f32(),
+    //         );
+    //         pos += Vec3::new(9.0, 6.0, 0.0).normalize() * 10.0;
+    //     }
+    // }
+    // for _ in 0..5 {
+    //     let step = Vec3::new(9.0, -6.0, 0.0).normalize() * 10.0;
+    //     let foo = step * random::<f32>();
+    //     let mut pos = Vec3::new(-450.0, 300.0, 0.0) + foo;
+    //     while pos.x <= 450.0 && pos.y >= -300.0 {
+    //         spawn_trail(
+    //             pos,
+    //             &mut commands,
+    //             TrailType::Gathering,
+    //             config.entries["trail.initial_strength"].f32(),
+    //         );
+    //         pos += step;
+    //     }
+    // }
 }
 
 fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
@@ -476,7 +491,7 @@ fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
         .insert(Food {});
 }
 
-fn spawn_trail(pos: Vec3, commands: &mut Commands, initial_strength: f32) {
+fn spawn_trail(pos: Vec3, commands: &mut Commands, trail_type: TrailType, initial_strength: f32) {
     commands
         .spawn_bundle(SpriteBundle {
             transform: Transform {
@@ -485,12 +500,16 @@ fn spawn_trail(pos: Vec3, commands: &mut Commands, initial_strength: f32) {
                 ..Default::default()
             },
             sprite: Sprite {
-                color: TRAIL_COLOR,
+                color: match trail_type {
+                    TrailType::GotFood => TRAIL_GOT_FOOD_COLOR,
+                    TrailType::Gathering => TRAIL_GATHERING_COLOR,
+                },
                 ..Default::default()
             },
             ..Default::default()
         })
         .insert(Trail {
+            trail_type: trail_type,
             strength: initial_strength,
         });
 }
@@ -567,7 +586,7 @@ fn obstacle_collision_system(
 
 fn food_collision_system(
     mut commands: Commands,
-    ant_query: Query<(Entity, Option<&Children>, &Ant, &Transform), Without<Food>>,
+    mut ant_query: Query<(Entity, Option<&Children>, &mut Ant, &Transform), Without<Food>>,
     mut available_food_query: Query<
         (Entity, &Food, &mut Transform),
         (Without<Parent>, Without<Ant>),
@@ -575,7 +594,7 @@ fn food_collision_system(
     home_query: Query<(Entity, &Home, &Transform), (Without<Ant>, Without<Food>)>,
 ) {
     let mut taken_food: HashSet<u32> = HashSet::new();
-    for (ant_entity, maybe_children, _ant, ant_transform) in ant_query.iter() {
+    for (ant_entity, maybe_children, mut ant, ant_transform) in ant_query.iter_mut() {
         match maybe_children {
             Some(children) if children.len() > 0 => {
                 // returning: check collision with home
@@ -586,11 +605,12 @@ fn food_collision_system(
                         for &child in children.iter() {
                             commands.entity(child).despawn_recursive();
                         }
+                        ant.carrying_food = false;
                     }
                 }
             }
             _ => {
-                // hunting: check collision with food
+                // gathering: check collision with food
                 for (food_entity, _food, mut transform) in available_food_query.iter_mut() {
                     if taken_food.contains(&food_entity.id()) {
                         continue;
@@ -602,6 +622,7 @@ fn food_collision_system(
                         transform.translation = Vec3::new(1.0, 0.0, 0.0);
                         commands.entity(ant_entity).push_children(&[food_entity]);
                         taken_food.insert(food_entity.id());
+                        ant.carrying_food = true;
                         break;
                     }
                 }
@@ -614,18 +635,23 @@ fn trail_spawn_system(
     mut commands: Commands,
     mut current_frame: Local<usize>,
     config: Res<Config>,
-    query: Query<(Entity, &Transform), With<Ant>>,
+    query: Query<(Entity, &Ant, &Transform)>,
 ) {
     let trail_spawn_period = config.entries["trail.spawn_period"].f32();
     let spawn_period_frames = (trail_spawn_period / TIME_STEP) as usize;
     let current_spawn_frame = *current_frame % spawn_period_frames;
-    for (entity, transform) in query.iter() {
+    for (entity, ant, transform) in query.iter() {
         let mut rng = ChaCha8Rng::seed_from_u64(entity.id() as u64);
         let ant_spawn_frame_offset = rng.gen::<usize>() % spawn_period_frames;
         if ant_spawn_frame_offset == current_spawn_frame {
             spawn_trail(
                 transform.translation,
                 &mut commands,
+                if ant.carrying_food {
+                    TrailType::GotFood
+                } else {
+                    TrailType::Gathering
+                },
                 config.entries["trail.initial_strength"].f32(),
             );
         }
@@ -641,8 +667,13 @@ fn trail_decay_system(
     let initial_strength = config.entries["trail.initial_strength"].f32();
     let decay_rate = config.entries["trail.decay_rate"].f32();
     for (entity, mut trail, mut sprite) in query.iter_mut() {
+        let mut color = match trail.trail_type {
+            TrailType::GotFood => TRAIL_GOT_FOOD_COLOR,
+            TrailType::Gathering => TRAIL_GATHERING_COLOR,
+        };
         trail.strength = trail.strength * decay_rate;
-        sprite.color = Color::rgb(0.65, 0.0, 1.0 - trail.strength / initial_strength / 2.0);
+        color.set_a(trail.strength / initial_strength);
+        sprite.color = color;
         if trail.strength < 0.01 {
             commands.entity(entity).despawn();
         }
@@ -659,7 +690,7 @@ fn vec3_angle(v: Vec3) -> f32 {
 }
 
 fn ant_movement_system(
-    mut ant_query: Query<&mut Transform, (With<Ant>, Without<Trail>)>,
+    mut ant_query: Query<(&Ant, &mut Transform), Without<Trail>>,
     trail_query: Query<(&Trail, &Transform), Without<Ant>>,
     config: Res<Config>,
 ) {
@@ -674,7 +705,7 @@ fn ant_movement_system(
         sensor_base_pos,
         Quat::from_rotation_z(-sensor_angle) * sensor_base_pos,
     ];
-    for mut ant_transform in ant_query.iter_mut() {
+    for (ant, mut ant_transform) in ant_query.iter_mut() {
         let velocity = ant_transform.rotation * Vec3::X * config.entries["ant.speed"].f32();
         ant_transform.translation += velocity * TIME_STEP;
 
@@ -687,9 +718,13 @@ fn ant_movement_system(
             ant_transform.mul_vec3(sensor_positions[2]),
         ];
         for (trail, trail_transform) in trail_query.iter() {
-            for (i, s_pos) in t_sensor_positions.iter().enumerate() {
-                if (trail_transform.translation - *s_pos).length() < sensor_radius {
-                    sensor_magnitudes[i] += trail.strength;
+            if ant.carrying_food && matches!(trail.trail_type, TrailType::Gathering)
+                || !ant.carrying_food && matches!(trail.trail_type, TrailType::GotFood)
+            {
+                for (i, s_pos) in t_sensor_positions.iter().enumerate() {
+                    if (trail_transform.translation - *s_pos).length() < sensor_radius {
+                        sensor_magnitudes[i] += trail.strength;
+                    }
                 }
             }
         }
