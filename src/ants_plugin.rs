@@ -66,6 +66,7 @@ enum Collider {
 enum Icon {
     SpawnObstacle,
     SpawnFood,
+    SpawnFoodCluster,
     SpawnHome,
 }
 
@@ -164,6 +165,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     }
 
     spawn_home(Vec3::new(0.0, -50.0, 0.0), &mut commands);
+
+    spawn_food_cluster(Vec3::new(-218.0, -84.0, 0.0), &mut commands);
+    spawn_food_cluster(Vec3::new(22.0, 157.0, 0.0), &mut commands);
+    spawn_food_cluster(Vec3::new(235.0, 1.0, 0.0), &mut commands);
 
     // Add walls
     let wall_color = Color::rgb(0.8, 0.8, 0.8);
@@ -267,6 +272,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
                 ..Default::default()
             },
             sprite: Sprite {
+                color: FOOD_COLOR,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(Icon::SpawnFoodCluster);
+    commands
+        .spawn_bundle(SpriteBundle {
+            transform: Transform {
+                translation: Vec3::new(-BOUNDS_X / 2.0 - 50.0, BOUNDS_Y / 2.0 - 150.0, 0.0),
+                scale: Vec3::new(40.0, 40.0, 1.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
                 color: HOME_COLOR,
                 ..Default::default()
             },
@@ -310,7 +329,9 @@ fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 
         position.y - window.height() / 2.,
         0.,
     );
-    *camera * norm
+    let mut pos = *camera * norm;
+    pos.z = 0.0;
+    return pos;
 }
 
 fn to_tile_center(world_pos: Vec3, grid_size: f32) -> Vec3 {
@@ -381,6 +402,21 @@ fn mouse_input_system(
                             pos_in_transform(&world_cursor_pos, &transform)
                         }) {
                             spawn_food(world_cursor_pos.x, world_cursor_pos.y, &mut commands);
+                        }
+                    } else if buttons.pressed(MouseButton::Right) {
+                        for (entity, _food, transform) in food_query.iter() {
+                            if pos_in_transform(&world_cursor_pos, &transform) {
+                                commands.entity(entity).despawn();
+                            }
+                        }
+                    }
+                }
+                Some(Icon::SpawnFoodCluster) => {
+                    if buttons.just_pressed(MouseButton::Left) {
+                        if !food_query.iter().any(|(_, _, transform)| {
+                            pos_in_transform(&world_cursor_pos, &transform)
+                        }) {
+                            spawn_food_cluster(world_cursor_pos, &mut commands);
                         }
                     } else if buttons.pressed(MouseButton::Right) {
                         for (entity, _food, transform) in food_query.iter() {
@@ -489,6 +525,33 @@ fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
             ..Default::default()
         })
         .insert(Food {});
+}
+
+fn spawn_food_cluster(pos: Vec3, commands: &mut Commands) {
+    println!("food cluster: {}", pos);
+    for i in 0..40 {
+        let r = 20.0;
+        let food_pos = pos
+            + Vec3::new(
+                random::<f32>() * 2.0 * r - r,
+                random::<f32>() * 2.0 * r - r,
+                0.0,
+            );
+        commands
+            .spawn_bundle(SpriteBundle {
+                transform: Transform {
+                    translation: food_pos,
+                    scale: Vec3::new(FOOD_SIZE, FOOD_SIZE, 1.0),
+                    ..Default::default()
+                },
+                sprite: Sprite {
+                    color: FOOD_COLOR,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .insert(Food {});
+    }
 }
 
 fn spawn_trail(pos: Vec3, commands: &mut Commands, trail_type: TrailType, initial_strength: f32) {
