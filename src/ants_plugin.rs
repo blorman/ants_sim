@@ -368,18 +368,17 @@ fn pos_in_bounds(pos: &Vec3) -> bool {
         && pos.y > -BOUNDS_Y / 2.0
 }
 
-//TODO: clean up these queries
 fn mouse_input_system(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
     windows: Res<Windows>,
     mut editor_input: ResMut<EditorInput>,
-    transform_query: Query<&Transform, (With<Camera>, Without<Map>)>,
-    collider_query: Query<(Entity, &Collider, &Transform), (Without<Ant>, Without<Map>)>,
-    home_query: Query<(Entity, &Home, &Transform), (Without<Ant>, Without<Map>)>,
-    food_query: Query<(Entity, &Food, &Transform), Without<Map>>,
-    icon_query: Query<(&Icon, &Transform), Without<Map>>,
-    map_transform_query: Query<&Transform, (With<Map>, Without<Ant>, Without<Food>, Without<Home>)>,
+    transform_query: Query<&Transform, With<Camera>>,
+    collider_query: Query<(Entity, &Collider, &Transform)>,
+    home_query: Query<(Entity, &Home, &Transform)>,
+    food_query: Query<(Entity, &Food, &Transform)>,
+    icon_query: Query<(&Icon, &Transform)>,
+    map_transform_query: Query<&Transform, With<Map>>,
     mut map_query: MapQuery,
 ) {
     let window = windows.get_primary().unwrap();
