@@ -1,5 +1,6 @@
 mod ants_plugin;
 mod console_debug_plugin;
+mod helpers;
 
 // use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
