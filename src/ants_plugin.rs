@@ -9,7 +9,6 @@ use bevy::{
 use bevy_ecs_tilemap::prelude::*;
 use noise::{HybridMulti, MultiFractal, NoiseFn};
 use rand::prelude::random;
-use rand::thread_rng;
 use rand::Rng;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -52,51 +51,10 @@ impl Plugin for AntsPlugin {
                     .with_system(food_collision_system)
                     .with_system(ant_movement_system)
                     .with_system(trail_spawn_system)
-                    .with_system(trail_decay_system), // .with_system(update_map),
+                    .with_system(trail_decay_system),
             );
     }
 }
-
-// fn build_map(map_query: &mut MapQuery, commands: &mut Commands) {
-//     let mut random = thread_rng();
-
-//     for _ in 0..100 {
-//         let position = TilePos(random.gen_range(50..60), random.gen_range(41..51));
-//         // Ignore errors for demo sake.
-//         let _ = map_query.set_tile(
-//             commands,
-//             position,
-//             Tile {
-//                 texture_index: 0,
-//                 ..Default::default()
-//             },
-//             0u16,
-//             0u16,
-//         );
-//         map_query.notify_chunk_for_tile(position, 0u16, 0u16);
-//     }
-// }
-
-// #[derive(Default, Component)]
-// struct LastUpdate {
-//     value: f64,
-// }
-
-// fn update_map(
-//     time: ResMut<Time>,
-//     mut commands: Commands,
-//     mut query: Query<&mut LastUpdate>,
-//     mut map_query: MapQuery,
-// ) {
-//     let current_time = time.seconds_since_startup();
-//     for mut last_update in query.iter_mut() {
-//         if (current_time - last_update.value) > 1.0 {
-//             // map_query.despawn_layer_tiles(&mut commands, 0u16, 0u16);
-//             build_map(&mut map_query, &mut commands);
-//             last_update.value = current_time;
-//         }
-//     }
-// }
 
 #[derive(Component)]
 struct Ant {
@@ -202,9 +160,8 @@ fn setup(
                 texture: asset_server.load("ant.png"),
                 transform: Transform {
                     scale: Vec3::new(ANT_SIZE, ANT_SIZE, 0.0),
-                    translation: Vec3::new(5.0, 10.0, 0.0),
-                    // rotation: Quat::from_rotation_z(random::<f32>() * 2.0 * std::f32::consts::PI),
-                    rotation: Quat::from_rotation_z(std::f32::consts::PI / 2.0),
+                    translation: Vec3::new(0.0, -50.0, 0.0),
+                    rotation: Quat::from_rotation_z(random::<f32>() * 2.0 * std::f32::consts::PI),
                     ..Default::default()
                 },
                 sprite: Sprite {
@@ -375,6 +332,62 @@ fn setup(
     //         pos += step;
     //     }
     // }
+
+    let texture_handle = asset_server.load("tiles_10.png");
+
+    // Create map entity and component:
+    let map_entity = commands.spawn().id();
+    let mut map = Map::new(0u16, map_entity);
+
+    let layer_settings = LayerSettings::new(
+        MapSize((BOUNDS_X / 100.0) as u32, (BOUNDS_Y / 100.0) as u32),
+        ChunkSize(10, 10),
+        TileSize(10.0, 10.0),
+        TextureSize(60.0, 10.0),
+    );
+
+    // Creates a new layer builder with a layer entity.
+    let (mut layer_builder, _) = LayerBuilder::new(&mut commands, layer_settings, 0u16, 0u16);
+
+    // // Build all tiles
+    // layer_builder.set_all(TileBundle {
+    //     tile: Tile {
+    //         color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
+    //         ..Tile::default()
+    //     },
+    //     ..TileBundle::default()
+    // });
+
+    // Add one tile
+    let _ = layer_builder.set_tile(
+        TilePos(0, 0),
+        TileBundle {
+            tile: Tile {
+                color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
+                ..Tile::default()
+            },
+            ..TileBundle::default()
+        },
+    );
+
+    // Builds the layer.
+    // Note: Once this is called you can no longer edit the layer until a hard sync in bevy.
+    let layer_entity = map_query.build_layer(&mut commands, layer_builder, texture_handle);
+
+    // Required to keep track of layers for a map internally.
+    map.add_layer(&mut commands, 0u16, layer_entity);
+
+    // Spawn Map
+    // Required in order to use map_query to retrieve layers/tiles.
+    commands
+        .entity(map_entity)
+        .insert(map)
+        .insert(Transform::from_xyz(
+            -layer_settings.get_pixel_center().x,
+            -layer_settings.get_pixel_center().y,
+            0.0,
+        ))
+        .insert(GlobalTransform::default());
 }
 
 fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
@@ -410,145 +423,16 @@ fn pos_in_bounds(pos: &Vec3) -> bool {
         && pos.y > -BOUNDS_Y / 2.0
 }
 
-fn unproject_iso(pos: Vec2, tile_width: f32, tile_height: f32) -> Vec2 {
-    let half_width = tile_width / 2.0;
-    let half_height = tile_height / 2.0;
-    let x = ((pos.x / half_width) + (-(pos.y) / half_height)) / 2.0;
-    let y = ((-(pos.y) / half_height) - (pos.x / half_width)) / 2.0;
-    Vec2::new(x.round(), y.round())
-}
-
-fn project_iso(pos: Vec2, tile_width: f32, tile_height: f32) -> Vec2 {
-    let x = (pos.x - pos.y) * tile_width / 2.0;
-    let y = (pos.x + pos.y) * tile_height / 2.0;
-    return Vec2::new(x, -y);
-}
-
-fn world_pos_from_tile_pos(
-    tile_pos: TilePos,
-    map_query: &mut MapQuery,
-    map_transform: &Transform,
-    map_id: u16,
-    layer_id: u16,
-) -> Vec3 {
-    if let Some((entity, layer)) = map_query.get_layer(map_id, layer_id) {
-        let grid_size = layer.settings.grid_size.extend(0.0);
-        return Vec3::new(tile_pos.0 as f32, tile_pos.1 as f32, 0.0) * grid_size
-            + map_transform.translation
-            + grid_size / 2.0;
-    }
-    Vec3::new(0.0, 0.0, 0.0)
-}
-
-fn tile_pos_from_world_pos(
-    world_pos: &Vec3,
-    map_query: &mut MapQuery,
-    map_transform: &Transform,
-    map_id: u16,
-    layer_id: u16,
-) -> TilePos {
-    if let Some((entity, layer)) = map_query.get_layer(map_id, layer_id) {
-        // 90x60
-        let map_size = layer.get_layer_size_in_tiles();
-        // println!("{} {}", map_size.0, map_size.1);
-        // println!("grid_size: {}", layer.settings.grid_size);
-
-        let grid_size = layer.settings.grid_size;
-        let layer_size_in_tiles: Vec2 = layer.get_layer_size_in_tiles().into();
-        let map_size: Vec2 = layer_size_in_tiles * grid_size;
-        let map_pos = unproject_iso(world_pos.truncate(), grid_size.x, grid_size.y);
-        let center = project_iso(
-            Vec2::new(map_pos.x, map_pos.y - 2.0),
-            grid_size.x,
-            grid_size.y,
-        );
-        let foo = (*world_pos - map_transform.translation).truncate() / grid_size;
-        // println!("grid_size: {}", grid_size);
-        // println!("layer_size_in_tiles: {}", layer_size_in_tiles);
-        // println!("map_size: {}", map_size);
-        // println!("map_transform: {}", map_transform.translation);
-        // println!("world_pos: {}", world_pos.truncate());
-        // println!("map_pos: {}", map_pos);
-        // println!("center: {}", center);
-        // println!("foo: {} {} {}", foo, foo.x as u32, foo.y as u32);
-        return TilePos(foo.x as u32, foo.y as u32);
-    }
-    TilePos(0, 0)
-}
-
-fn collide_tiles_with_rect(
-    pos: Vec3,
-    dimensions: Vec2,
-    map_query: &mut MapQuery,
-    map_transform: &Transform,
-    // tile_query: Query<&Tile>,
-    map_id: u16,
-    layer_id: u16,
-) -> Vec<Collision> {
-    let mut collisions = Vec::new();
-    let box_bottom_left = pos - dimensions.extend(0.0) / 2.0;
-    let box_top_right = pos + dimensions.extend(0.0) / 2.0;
-    let tile_pos_bottom_left =
-        tile_pos_from_world_pos(&box_bottom_left, map_query, map_transform, map_id, layer_id);
-    let tile_pos_top_right =
-        tile_pos_from_world_pos(&box_top_right, map_query, map_transform, map_id, layer_id);
-    let tile_pos_center = tile_pos_from_world_pos(&pos, map_query, map_transform, map_id, layer_id);
-    if let Some((entity, layer)) = map_query.get_layer(map_id, layer_id) {
-        let grid_size = layer.settings.grid_size;
-        for i in tile_pos_bottom_left.0..=tile_pos_top_right.0 {
-            for j in tile_pos_bottom_left.1..=tile_pos_top_right.1 {
-                if let Ok(tile_entity) = map_query.get_tile_entity(TilePos(i, j), map_id, layer_id)
-                {
-                    let tile_world_pos = world_pos_from_tile_pos(
-                        TilePos(i, j),
-                        map_query,
-                        map_transform,
-                        map_id,
-                        layer_id,
-                    );
-                    let collision = collide(pos, dimensions, tile_world_pos, grid_size);
-                    if let Some(collision) = collision {
-                        collisions.push(collision);
-                    }
-                    // if (i == tile_pos_center) {
-
-                    // }
-                    // if i < (tile_pos_bottom_left + tile_pos_top_right)/2 {
-                    //     vec.push(Collision::Left);
-                    // } else {
-
-                    // }
-                    // if  < (tile_pos_bottom_left + tile_pos_top_right)/2 {
-                    //     vec.push(Collision::Left);
-                    // }
-                    // if i < (tile_pos_bottom_left + tile_pos_top_right)/2 {
-                    //     vec.push(Collision::Left);
-                    // }
-                    // if i < (tile_pos_bottom_left + tile_pos_top_right)/2 {
-                    //     vec.push(Collision::Left);
-                    // }
-                }
-                // if let Ok(tile) = tile_query.get(tile_entity) {
-                //     tile.texture_index = 10;
-                // }
-            }
-        }
-    }
-    return collisions;
-}
-
 fn mouse_input_system(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
     windows: Res<Windows>,
     mut editor_input: ResMut<EditorInput>,
-    transform_query: Query<&Transform, (With<Camera>, Without<Map>)>,
-    collider_query: Query<(Entity, &Collider, &Transform), (Without<Ant>, Without<Map>)>,
-    home_query: Query<(Entity, &Home, &Transform), (Without<Ant>, Without<Map>)>,
-    food_query: Query<(Entity, &Food, &Transform), Without<Map>>,
-    icon_query: Query<(&Icon, &Transform), Without<Map>>,
-    map_transform_query: Query<&Transform, (With<Map>, Without<Ant>, Without<Food>, Without<Home>)>,
-    mut map_query: MapQuery,
+    transform_query: Query<&Transform, With<Camera>>,
+    collider_query: Query<(Entity, &Collider, &Transform), Without<Ant>>,
+    home_query: Query<(Entity, &Home, &Transform), Without<Ant>>,
+    food_query: Query<(Entity, &Food, &Transform)>,
+    icon_query: Query<(&Icon, &Transform)>,
 ) {
     let window = windows.get_primary().unwrap();
     if let Some(cursor_pos) = window.cursor_position() {
@@ -569,23 +453,7 @@ fn mouse_input_system(
                         if !collider_query.iter().any(|(_, _, transform)| {
                             pos_in_transform(&world_cursor_pos, &transform)
                         }) {
-                            let tile_pos = tile_pos_from_world_pos(
-                                &world_cursor_pos,
-                                &mut map_query,
-                                map_transform_query.single(),
-                                0,
-                                0,
-                            );
-                            let bar = world_pos_from_tile_pos(
-                                tile_pos,
-                                &mut map_query,
-                                map_transform_query.single(),
-                                0,
-                                0,
-                            );
-                            // spawn_obstacle(tile_center, &mut commands);
-                            spawn_obstacle2(tile_pos, &mut commands, &mut map_query);
-                            // build_map(&mut map_query, &mut commands);
+                            spawn_obstacle(tile_center, &mut commands);
                         }
                     } else if buttons.pressed(MouseButton::Right) {
                         for (entity, _collider, transform) in collider_query.iter() {
@@ -650,10 +518,8 @@ fn mouse_input_system(
 fn map_generator_system(
     mut commands: Commands,
     config: ResMut<Config>,
-    asset_server: Res<AssetServer>,
     mut map_generator: ResMut<MapGenerator>,
     obstacle_query: Query<Entity, With<Obstacle>>,
-    mut map_query: MapQuery,
 ) {
     if map_generator.octaves == config.entries["map.octaves"].usize()
         && map_generator.frequency == config.entries["map.frequency"].f64()
@@ -674,125 +540,11 @@ fn map_generator_system(
         .set_lacunarity(map_generator.lacunarity)
         .set_persistence(map_generator.persistence);
 
-    if map_query.get_layer(0, 0).is_none() {
-        let texture_handle = asset_server.load("tiles_10.png");
-
-        // Create map entity and component:
-        let map_entity = commands.spawn().id();
-        let mut map = Map::new(0u16, map_entity);
-
-        let layer_settings = LayerSettings::new(
-            MapSize((BOUNDS_X / 100.0) as u32, (BOUNDS_Y / 100.0) as u32),
-            ChunkSize(10, 10),
-            TileSize(10.0, 10.0),
-            TextureSize(60.0, 10.0),
-        );
-
-        // Creates a new layer builder with a layer entity.
-        let (mut layer_builder, _) =
-            LayerBuilder::<TileBundle>::new(&mut commands, layer_settings, 0u16, 0u16);
-
-        // // Build all tiles
-        // layer_builder.set_all(TileBundle {
-        //     tile: Tile {
-        //         color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
-        //         ..Tile::default()
-        //     },
-        //     ..TileBundle::default()
-        // });
-
-        // Add one tile
-        // let _ = layer_builder.set_tile(
-        //     TilePos(45, 31),
-        //     TileBundle {
-        //         tile: Tile {
-        //             color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
-        //             ..Tile::default()
-        //         },
-        //         ..TileBundle::default()
-        //     },
-        // );
-
-        for tile_bundle in generate_map_tiles(map_generator) {
-            let _ = layer_builder.set_tile(tile_bundle.position, tile_bundle);
-        }
-        // fn generate_map_tiles(map_generator: MapGenerator) -> Vec<TileBundle> {
-
-        // Builds the layer.
-        // Note: Once this is called you can no longer edit the layer until a hard sync in bevy.
-        let layer_entity = map_query.build_layer(&mut commands, layer_builder, texture_handle);
-
-        // Required to keep track of layers for a map internally.
-        map.add_layer(&mut commands, 0u16, layer_entity);
-
-        // Spawn Map
-        // Required in order to use map_query to retrieve layers/tiles.
-        commands
-            .entity(map_entity)
-            .insert(map)
-            .insert(Transform::from_xyz(
-                -layer_settings.get_pixel_center().x,
-                -layer_settings.get_pixel_center().y,
-                0.0,
-            ))
-            .insert(GlobalTransform::default());
-
-        // spawn_obstacle2(TilePos(45, 31), &mut commands, &mut map_query);
-    } else {
-        map_query.despawn_layer_tiles(&mut commands, 0, 0);
-        let mut chunk_entities = Vec::new();
-        if let Some((_entity, layer)) = map_query.get_layer(0, 0) {
-            for i in 0..layer.settings.map_size.0 {
-                for j in 0..layer.settings.map_size.1 {
-                    if let Some(chunk_entity) = layer.get_chunk(ChunkPos(i, j)) {
-                        chunk_entities.push(chunk_entity);
-                    }
-                }
-            }
-        }
-        for chunk_entity in chunk_entities {
-            map_query.notify_chunk(chunk_entity);
-        }
-        for tile_bundle in generate_map_tiles(map_generator) {
-            let _result = map_query.set_tile(
-                &mut commands,
-                tile_bundle.position,
-                tile_bundle.tile,
-                0u16,
-                0u16,
-            );
-            map_query.notify_chunk_for_tile(tile_bundle.position, 0u16, 0u16);
-        }
+    for entity in obstacle_query.iter() {
+        commands.entity(entity).despawn();
     }
 
-    // for entity in obstacle_query.iter() {
-    //     commands.entity(entity).despawn();
-    // }
-
-    // // obstacles
-    // let num_tiles_x = (BOUNDS_X / OBSTACLE_TILE_SIZE) as i32;
-    // let num_tiles_y = (BOUNDS_Y / OBSTACLE_TILE_SIZE) as i32;
-    // for i in 0..num_tiles_x {
-    //     for j in 0..num_tiles_y {
-    //         let ox = OBSTACLE_TILE_SIZE * ((i - num_tiles_x / 2) as f32) + OBSTACLE_TILE_SIZE / 2.0;
-    //         let oy = OBSTACLE_TILE_SIZE * ((num_tiles_y / 2 - j) as f32) - OBSTACLE_TILE_SIZE / 2.0;
-    //         if noise.get([ox as f64, oy as f64]) < map_generator.threshold {
-    //             continue;
-    //         }
-    //         spawn_obstacle(Vec3::new(ox, oy, 0.0), &mut commands);
-    //         // spawn_obstacle2(TilePos(i as u32, j as u32), &mut commands, &mut map_query);
-    //         println!("spawning {},{}", i, j);
-    //     }
-    // }
-}
-
-fn generate_map_tiles(map_generator: ResMut<MapGenerator>) -> Vec<TileBundle> {
-    let mut tile_bundles = Vec::new();
-    let noise = HybridMulti::new()
-        .set_octaves(map_generator.octaves)
-        .set_frequency(map_generator.frequency)
-        .set_lacunarity(map_generator.lacunarity)
-        .set_persistence(map_generator.persistence);
+    // obstacles
     let num_tiles_x = (BOUNDS_X / OBSTACLE_TILE_SIZE) as i32;
     let num_tiles_y = (BOUNDS_Y / OBSTACLE_TILE_SIZE) as i32;
     for i in 0..num_tiles_x {
@@ -802,29 +554,9 @@ fn generate_map_tiles(map_generator: ResMut<MapGenerator>) -> Vec<TileBundle> {
             if noise.get([ox as f64, oy as f64]) < map_generator.threshold {
                 continue;
             }
-            // spawn_obstacle(Vec3::new(ox, oy, 0.0), &mut commands);
-            // spawn_obstacle2(TilePos(i as u32, j as u32), &mut commands, &mut map_query);
-            // println!("spawning {},{}", i, j);
-            tile_bundles.push(TileBundle {
-                position: TilePos(i as u32, (num_tiles_y - j) as u32),
-                tile: Tile {
-                    texture_index: 0,
-                    ..Default::default()
-                },
-                ..Default::default()
-            });
-            //         let _result = map_query.set_tile(
-            // commands,
-            // tile_pos,
-            // Tile {
-            //     texture_index: 0,
-            //     ..Default::default()
-            // },
-            // 0u16,
-            // 0u16,
+            spawn_obstacle(Vec3::new(ox, oy, 0.0), &mut commands);
         }
     }
-    tile_bundles
 }
 
 fn spawn_obstacle(pos: Vec3, commands: &mut Commands) {
@@ -843,31 +575,6 @@ fn spawn_obstacle(pos: Vec3, commands: &mut Commands) {
         })
         .insert(Collider::Solid)
         .insert(Obstacle {});
-}
-
-fn spawn_obstacle2(tile_pos: TilePos, commands: &mut Commands, map_query: &mut MapQuery) {
-    // let result = map_query.set_tile(
-    //     commands,
-    //     tile_pos,
-    //     Tile {
-    //         color: Color::rgba(1.0, 0.0, 0.0, 0.5), // Color tint.
-    //         ..Tile::default()
-    //     },
-    //     0,
-    //     0,
-    // );
-
-    let _result = map_query.set_tile(
-        commands,
-        tile_pos,
-        Tile {
-            texture_index: 0,
-            ..Default::default()
-        },
-        0u16,
-        0u16,
-    );
-    map_query.notify_chunk_for_tile(tile_pos, 0u16, 0u16);
 }
 
 fn spawn_food(x: f32, y: f32, commands: &mut Commands) {
@@ -956,8 +663,6 @@ fn spawn_home(pos: Vec3, commands: &mut Commands) {
 fn obstacle_collision_system(
     mut ant_query: Query<(&Ant, &mut Transform), Without<Collider>>,
     collider_query: Query<(&Collider, &Transform), Without<Ant>>,
-    mut map_query: MapQuery,
-    map_transform_query: Query<&Transform, (With<Map>, Without<Ant>)>,
 ) {
     for (_ant, mut ant_transform) in ant_query.iter_mut() {
         let ant_size = ant_transform.scale.truncate();
@@ -1003,43 +708,6 @@ fn obstacle_collision_system(
                         ant_transform.rotation = Quat::from_rotation_z(angle);
                     }
                 }
-            }
-        }
-        let collisions = collide_tiles_with_rect(
-            ant_transform.translation,
-            ant_size,
-            &mut map_query,
-            map_transform_query.single(),
-            0,
-            0,
-        );
-        for collision in collisions {
-            // reflect the ball when it collides
-            let mut reflect_x = false;
-            let mut reflect_y = false;
-            let direction = ant_transform.rotation * Vec3::X;
-
-            // only reflect if the ball's velocity is going in the opposite direction of the
-            // collision
-            match collision {
-                Collision::Left => reflect_x = direction.x > 0.0,
-                Collision::Right => reflect_x = direction.x < 0.0,
-                Collision::Top => reflect_y = direction.y < 0.0,
-                Collision::Bottom => reflect_y = direction.y > 0.0,
-            }
-
-            // reflect velocity on the x-axis if we hit something on the x-axis
-            if reflect_x {
-                let clamped_direction = Vec3::new(-direction.x * 0.1, direction.y, 0.0);
-                let angle = vec3_angle(clamped_direction);
-                ant_transform.rotation = Quat::from_rotation_z(angle);
-            }
-
-            // reflect velocity on the y-axis if we hit something on the y-axis
-            if reflect_y {
-                let clamped_direction = Vec3::new(direction.x, -direction.y * 0.1, 0.0);
-                let angle = vec3_angle(clamped_direction);
-                ant_transform.rotation = Quat::from_rotation_z(angle);
             }
         }
     }
