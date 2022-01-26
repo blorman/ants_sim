@@ -20,8 +20,6 @@ pub struct AntsPlugin;
 const TIME_STEP: f32 = 1.0 / 60.0;
 const BOUNDS_X: f32 = 900.0;
 const BOUNDS_Y: f32 = 600.0;
-// TODO: move to config
-const ANT_RANDOM_WANDERING: f32 = 0.02 * std::f32::consts::PI;
 const OBSTACLE_TILE_SIZE: f32 = 10.0;
 const OBSTACLE_COLOR: Color = Color::rgb(0.65, 0.16, 0.16);
 const FOOD_SIZE: f32 = 5.0;
@@ -109,13 +107,12 @@ struct EditorInput {
     selected_icon: Option<Icon>,
 }
 
-fn setup(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut config: ResMut<Config>,
-    mut map_query: MapQuery,
-) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: ResMut<Config>) {
     config.entries.insert("ant.speed", ConfigValue::Float(40.0));
+    config.entries.insert(
+        "ant.wandering",
+        ConfigValue::Float(0.02 * std::f32::consts::PI),
+    );
     config.entries.insert("map.octaves", ConfigValue::Int(4));
     config
         .entries
@@ -893,7 +890,8 @@ fn ant_movement_system(
         ant_transform.translation += velocity * TIME_STEP;
 
         let angle = vec3_angle(velocity);
-        let wandering_angle_delta = ANT_RANDOM_WANDERING * (random::<f32>() * 2.0 - 1.0);
+        let wandering_angle_delta =
+            config.entries["ant.wandering"].f32() * (random::<f32>() * 2.0 - 1.0);
 
         let t_sensor_positions = [
             ant_transform.mul_vec3(sensor_positions[0]),
