@@ -72,20 +72,20 @@ pub fn collide_tiles_with_rect(
     return collisions;
 }
 
-pub fn collide_tiles_with_sector(
-    pos: Vec3,
-    radius: f32,
-    angle1: f32,
-    angle2: f32,
-    map_query: &mut MapQuery,
-    map_transform: &Transform,
-    map_id: u16,
-    layer_id: u16,
-) -> Vec<Collision> {
-    // https://stackoverflow.com/questions/13652518/efficiently-find-points-inside-a-circle-sector
-    let mut collisions = Vec::new();
-    return collisions;
-}
+// pub fn collide_tiles_with_sector(
+//     pos: Vec3,
+//     radius: f32,
+//     angle1: f32,
+//     angle2: f32,
+//     map_query: &mut MapQuery,
+//     map_transform: &Transform,
+//     map_id: u16,
+//     layer_id: u16,
+// ) -> Vec<Collision> {
+//     // https://stackoverflow.com/questions/13652518/efficiently-find-points-inside-a-circle-sector
+//     let mut collisions = Vec::new();
+//     return collisions;
+// }
 
 pub fn despawn_layer_tiles_and_notify_chunks(
     commands: &mut Commands,
