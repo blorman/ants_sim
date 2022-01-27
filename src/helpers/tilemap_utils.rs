@@ -72,6 +72,21 @@ pub fn collide_tiles_with_rect(
     return collisions;
 }
 
+pub fn collide_tiles_with_sector(
+    pos: Vec3,
+    radius: f32,
+    angle1: f32,
+    angle2: f32,
+    map_query: &mut MapQuery,
+    map_transform: &Transform,
+    map_id: u16,
+    layer_id: u16,
+) -> Vec<Collision> {
+    // https://stackoverflow.com/questions/13652518/efficiently-find-points-inside-a-circle-sector
+    let mut collisions = Vec::new();
+    return collisions;
+}
+
 pub fn despawn_layer_tiles_and_notify_chunks(
     commands: &mut Commands,
     map_query: &mut MapQuery,
@@ -93,3 +108,44 @@ pub fn despawn_layer_tiles_and_notify_chunks(
         map_query.notify_chunk(chunk_entity);
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use bevy::prelude::*;
+//     use bevy_ecs_tilemap::MapQuery;
+//     use bevy_ecs_tilemap::TilemapPlugin;
+
+//     #[test]
+//     fn it_works() {
+//         let mut world = World::new();
+//         let mut app = App::from_world(&mut world);
+//         app.add_plugin(TilemapPlugin);
+//         // let mut schedule = Schedule::default();
+//         // let mut test_stage = SystemStage::parallel();
+//         // test_stage.add_plugin(TilemapPlugin);
+//         // schedule.add_stage("test_stage", test_stage);
+//         for iteration in 1..=10 {
+//             println!("Simulating frame {}/10", iteration);
+//             app.update();
+//         }
+
+//         // https://github.com/bevyengine/bevy/blob/main/crates/bevy_ecs/examples/resources.rs
+//         // https://github.com/bevyengine/bevy/issues/2687
+//         // let mut state: SystemState<(Commands, ResMut<ClientList>, Query<&mut ActorInput>)> = SystemState::new(&mut world);
+//         // let (commands, client_list, actor_input) = state.get_mut(&mut World);
+
+//         //     let map_query = MapQuery{};
+//         //     let map_transform = Tranform{};
+//         //     let v = world_pos_from_tile_pos(
+//         // TilePos(0,0),
+//         // map_query,
+//         // map_transform,
+//         // 0,
+//         // 0,
+//     }
+
+//     // #[test]
+//     // fn it_works() {
+//     //     assert_eq!(2 + 2, 4);
+//     // }
+// }
