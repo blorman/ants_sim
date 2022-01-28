@@ -1,11 +1,12 @@
 use bevy::prelude::*;
-
 use bevy_rapier2d::prelude::*;
+use nalgebra::{UnitComplex, Vector2};
 
 const ANT_SIZE: f32 = 5.0;
 
 fn main() {
     App::new()
+        .init_resource::<Foo>()
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierRenderPlugin)
@@ -19,10 +20,17 @@ fn main() {
         .run()
 }
 
+#[derive(Default)]
+struct Foo {
+    click_pos: f32,
+    click_angle: f32,
+}
+
 fn controller_system(
     mut commands: Commands,
     buttons: Res<Input<MouseButton>>,
     windows: Res<Windows>,
+    mut foo: ResMut<Foo>,
     mut rigid_bodies: Query<
         (
             &mut RigidBodyForcesComponent,
@@ -38,6 +46,23 @@ fn controller_system(
     let window = windows.get_primary().unwrap();
     if let Some(cursor_pos) = window.cursor_position() {
         let world_cursor_pos = window_to_world(cursor_pos, window, camera_query.single());
+        if buttons.just_pressed(MouseButton::Left) {
+            foo.click_pos = world_cursor_pos.y;
+            println!("click pos: {}", foo.click_pos);
+
+            let (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) = rigid_bodies.single_mut();
+            foo.click_angle = rb_pos.position.rotation.angle();
+        }
+        if buttons.pressed(MouseButton::Left) {
+            let delta = world_cursor_pos.y - foo.click_pos;
+            let delta_foo = delta / 600.0;
+
+            // scaled_diff = (world_cursor_pos.y - foo.click_pos) / BOUNDS_Y;
+            println!("pressed: {} {} {}", world_cursor_pos.y, delta, delta_foo);
+            let (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) = rigid_bodies.single_mut();
+            rb_pos.position.rotation =
+                UnitComplex::from_angle(foo.click_angle + delta_foo * std::f32::consts::PI * 2.0);
+        }
     }
     // for (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) in rigid_bodies.iter_mut() {
     //     UnitComplex::from_angle(editor_input.grab_scalar * std::f32::consts::PI * 2.0);
@@ -79,8 +104,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             texture: asset_server.load("ant.png"),
             transform: Transform {
                 scale: Vec3::new(ANT_SIZE, ANT_SIZE, 0.0),
-                // translation: Vec3::new(0.0, -50.0, 0.0),
-                // rotation: Quat::from_rotation_z(random::<f32>() * 2.0 * std::f32::consts::PI),
                 ..Default::default()
             },
             sprite: Sprite {
