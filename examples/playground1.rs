@@ -15,7 +15,34 @@ fn main() {
             ..Default::default()
         })
         .add_startup_system(setup.label("setup"))
+        .add_system(controller_system)
         .run()
+}
+
+fn controller_system(
+    mut commands: Commands,
+    buttons: Res<Input<MouseButton>>,
+    windows: Res<Windows>,
+    mut rigid_bodies: Query<
+        (
+            &mut RigidBodyForcesComponent,
+            &mut RigidBodyVelocityComponent,
+            &RigidBodyMassPropsComponent,
+            &mut RigidBodyPositionComponent,
+        ),
+        With<AntController>,
+        // Without<Ant>,
+    >,
+    camera_query: Query<&Transform, With<Camera>>,
+) {
+    let window = windows.get_primary().unwrap();
+    if let Some(cursor_pos) = window.cursor_position() {
+        let world_cursor_pos = window_to_world(cursor_pos, window, camera_query.single());
+    }
+    // for (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) in rigid_bodies.iter_mut() {
+    //     UnitComplex::from_angle(editor_input.grab_scalar * std::f32::consts::PI * 2.0);
+    //     // rb_pos.position.rotation = UnitComplex::from_angle(rb_pos.position.rotation.angle() + 0.01);
+    // }
 }
 
 #[derive(Component)]
@@ -23,7 +50,7 @@ struct AntController {}
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = OrthographicCameraBundle::new_2d();
-    camera.orthographic_projection.scale = 1.0;
+    camera.orthographic_projection.scale = 0.25;
     commands.spawn_bundle(camera);
 
     /* Create the bouncing ball. */
@@ -86,7 +113,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(180.0, 0.1).into(),
-            position: (Vec2::new(0.0, -60.0)).into(),
+            position: (Vec2::new(0.0, -15.0)).into(),
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
@@ -95,7 +122,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(180.0, 0.1).into(),
-            position: (Vec2::new(0.0, 60.0)).into(),
+            position: (Vec2::new(0.0, 15.0)).into(),
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
@@ -104,7 +131,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(0.1, 120.0).into(),
-            position: (Vec2::new(-90.0, 0.0)).into(),
+            position: (Vec2::new(-20.0, 0.0)).into(),
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
@@ -113,9 +140,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(0.1, 120.0).into(),
-            position: (Vec2::new(90.0, 0.0)).into(),
+            position: (Vec2::new(20.0, 0.0)).into(),
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
         .insert(ColliderDebugRender::with_id(2));
+}
+
+fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
+    let norm = Vec3::new(
+        position.x - window.width() / 2.,
+        position.y - window.height() / 2.,
+        0.,
+    );
+    let mut pos = *camera * norm;
+    pos.z = 0.0;
+    return pos;
 }
