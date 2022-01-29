@@ -20,6 +20,27 @@ fn main() {
         .run()
 }
 
+#[derive(Component)]
+struct Ant {
+    target_speed: f32,
+    motor_force: f32,
+    grip_force: f32,
+    turning_torque: f32,
+    random_turning_torque: f32,
+}
+
+impl Default for Ant {
+    fn default() -> Ant {
+        Ant {
+            target_speed: 8.0,
+            motor_force: 4.0,
+            grip_force: 5.0,
+            turning_torque: 2.0,
+            random_turning_torque: 5.0,
+        }
+    }
+}
+
 fn ant_movement_system(
     keys: Res<Input<KeyCode>>,
     mut rigid_bodies: Query<(
@@ -36,8 +57,8 @@ fn ant_movement_system(
         let object_x_velocity = rb_vel.linvel.dot(&object_x_axis) * object_x_axis.into_inner();
         if !keys.pressed(KeyCode::Down) {
             rb_forces.force += rb_pos.position.rotation
-                * Vector2::new(2.0, 0.0)
-                * (8.0 - object_x_velocity.norm())
+                * Vector2::x_axis().into_inner()
+                * (ant.target_speed - object_x_velocity.norm())
                 * ant.motor_force;
         }
 
@@ -56,25 +77,6 @@ fn ant_movement_system(
 
         // Random wandering
         rb_forces.torque += ant.random_turning_torque * (random::<f32>() * 2.0 - 1.0);
-    }
-}
-
-#[derive(Component)]
-struct Ant {
-    motor_force: f32,
-    grip_force: f32,
-    turning_torque: f32,
-    random_turning_torque: f32,
-}
-
-impl Default for Ant {
-    fn default() -> Ant {
-        Ant {
-            motor_force: 4.0,
-            grip_force: 5.0,
-            turning_torque: 2.0,
-            random_turning_torque: 5.0,
-        }
     }
 }
 
