@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
-use nalgebra::{UnitComplex, Vector2};
+use nalgebra::{Point2, Vector2};
+use rand::random;
 
 const ANT_SIZE: f32 = 5.0;
 
 fn main() {
     App::new()
-        .init_resource::<Foo>()
         .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierRenderPlugin)
@@ -16,21 +16,12 @@ fn main() {
             ..Default::default()
         })
         .add_startup_system(setup.label("setup"))
-        .add_system(controller_system)
+        .add_system(ant_movement_system)
         .run()
 }
 
-#[derive(Default)]
-struct Foo {
-    click_pos: f32,
-    click_angle: f32,
-}
-
-fn controller_system(
-    mut commands: Commands,
-    buttons: Res<Input<MouseButton>>,
-    windows: Res<Windows>,
-    mut foo: ResMut<Foo>,
+fn ant_movement_system(
+    keys: Res<Input<KeyCode>>,
     mut rigid_bodies: Query<
         (
             &mut RigidBodyForcesComponent,
@@ -38,40 +29,45 @@ fn controller_system(
             &RigidBodyMassPropsComponent,
             &mut RigidBodyPositionComponent,
         ),
-        With<AntController>,
-        // Without<Ant>,
+        With<Ant>,
     >,
-    camera_query: Query<&Transform, With<Camera>>,
 ) {
-    let window = windows.get_primary().unwrap();
-    if let Some(cursor_pos) = window.cursor_position() {
-        let world_cursor_pos = window_to_world(cursor_pos, window, camera_query.single());
-        if buttons.just_pressed(MouseButton::Left) {
-            foo.click_pos = world_cursor_pos.y;
-            println!("click pos: {}", foo.click_pos);
+    for (mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
+        let motor_force = 4.0;
+        let grip_force = 5.0;
+        let turning_torque = 2.0;
+        let random_turning_torque = 5.0;
 
-            let (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) = rigid_bodies.single_mut();
-            foo.click_angle = rb_pos.position.rotation.angle();
+        // Motor forces
+        let object_x_axis = rb_pos.position.rotation * Vector2::x_axis();
+        let object_x_velocity = rb_vel.linvel.dot(&object_x_axis) * object_x_axis.into_inner();
+        if !keys.pressed(KeyCode::Down) {
+            rb_forces.force += rb_pos.position.rotation
+                * Vector2::new(2.0, 0.0)
+                * (8.0 - object_x_velocity.norm())
+                * motor_force;
         }
-        if buttons.pressed(MouseButton::Left) {
-            let delta = world_cursor_pos.y - foo.click_pos;
-            let delta_foo = delta / 600.0;
 
-            // scaled_diff = (world_cursor_pos.y - foo.click_pos) / BOUNDS_Y;
-            println!("pressed: {} {} {}", world_cursor_pos.y, delta, delta_foo);
-            let (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) = rigid_bodies.single_mut();
-            rb_pos.position.rotation =
-                UnitComplex::from_angle(foo.click_angle + delta_foo * std::f32::consts::PI * 2.0);
+        // Grip forces
+        let object_y_axis = rb_pos.position.rotation * Vector2::y_axis();
+        let object_y_velocity = rb_vel.linvel.dot(&object_y_axis) * object_y_axis.into_inner();
+        rb_forces.force -= object_y_velocity * grip_force;
+
+        // Turning input
+        if keys.pressed(KeyCode::Left) {
+            rb_forces.torque += turning_torque;
         }
+        if keys.pressed(KeyCode::Right) {
+            rb_forces.torque -= turning_torque;
+        }
+
+        // Random wandering
+        rb_forces.torque += random_turning_torque * (random::<f32>() * 2.0 - 1.0);
     }
-    // for (_rb_forces, _rb_vel, _rb_mprops, mut rb_pos) in rigid_bodies.iter_mut() {
-    //     UnitComplex::from_angle(editor_input.grab_scalar * std::f32::consts::PI * 2.0);
-    //     // rb_pos.position.rotation = UnitComplex::from_angle(rb_pos.position.rotation.angle() + 0.01);
-    // }
 }
 
 #[derive(Component)]
-struct AntController {}
+struct Ant {}
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = OrthographicCameraBundle::new_2d();
@@ -82,22 +78,25 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let rigid_body = RigidBodyBundle {
         position: Vec2::new(0.0, 1.0).into(),
         damping: RigidBodyDamping {
-            linear_damping: 0.1,
-            angular_damping: 0.1,
+            linear_damping: 2.0,
+            angular_damping: 5.0,
         }
         .into(),
         ..Default::default()
     };
     let collider = ColliderBundle {
-        shape: ColliderShape::cuboid(0.5, 0.25).into(),
+        // TODO: debug render a capsule?
+        shape: ColliderShape::capsule(Point2::new(0.25, 0.0), Point2::new(-0.25, 0.0), 0.25).into(),
+        // shape: ColliderShape::cuboid(0.5, 0.25).into(),
         material: ColliderMaterial {
             restitution: 0.7,
+            friction: 0.0,
             ..Default::default()
         }
         .into(),
         ..Default::default()
     };
-    let entity1 = commands
+    commands
         .spawn_bundle(rigid_body)
         .insert_bundle(collider)
         .insert_bundle(SpriteBundle {
@@ -114,28 +113,18 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(ColliderPositionSync::Discrete)
         .insert(ColliderDebugRender::with_id(2))
+        .insert(Ant {})
         .id();
-
-    let entity2 = commands
-        .spawn_bundle(RigidBodyBundle {
-            body_type: RigidBodyType::Static.into(),
-            ..Default::default()
-        })
-        .insert(AntController {})
-        .id();
-
-    let joint = PrismaticJoint::new(Vector::x_axis())
-        .local_anchor1(point![0.0, 1.0])
-        .local_anchor2(point![0.0, 0.0])
-        .motor_velocity(8.0, 1.0);
-    commands
-        .spawn()
-        .insert(JointBuilderComponent::new(joint, entity1, entity2));
 
     // bottom wall
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(180.0, 0.1).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
             position: (Vec2::new(0.0, -15.0)).into(),
             ..Default::default()
         })
@@ -145,6 +134,11 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(180.0, 0.1).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
             position: (Vec2::new(0.0, 15.0)).into(),
             ..Default::default()
         })
@@ -154,6 +148,11 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(0.1, 120.0).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
             position: (Vec2::new(-20.0, 0.0)).into(),
             ..Default::default()
         })
@@ -163,20 +162,14 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands
         .spawn_bundle(ColliderBundle {
             shape: ColliderShape::cuboid(0.1, 120.0).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
             position: (Vec2::new(20.0, 0.0)).into(),
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
         .insert(ColliderDebugRender::with_id(2));
-}
-
-fn window_to_world(position: Vec2, window: &Window, camera: &Transform) -> Vec3 {
-    let norm = Vec3::new(
-        position.x - window.width() / 2.,
-        position.y - window.height() / 2.,
-        0.,
-    );
-    let mut pos = *camera * norm;
-    pos.z = 0.0;
-    return pos;
 }
