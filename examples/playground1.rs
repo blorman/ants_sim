@@ -22,22 +22,15 @@ fn main() {
 
 fn ant_movement_system(
     keys: Res<Input<KeyCode>>,
-    mut rigid_bodies: Query<
-        (
-            &mut RigidBodyForcesComponent,
-            &mut RigidBodyVelocityComponent,
-            &RigidBodyMassPropsComponent,
-            &mut RigidBodyPositionComponent,
-        ),
-        With<Ant>,
-    >,
+    mut rigid_bodies: Query<(
+        &Ant,
+        &mut RigidBodyForcesComponent,
+        &mut RigidBodyVelocityComponent,
+        &RigidBodyMassPropsComponent,
+        &mut RigidBodyPositionComponent,
+    )>,
 ) {
-    for (mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
-        let motor_force = 4.0;
-        let grip_force = 5.0;
-        let turning_torque = 2.0;
-        let random_turning_torque = 5.0;
-
+    for (ant, mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
         // Motor forces
         let object_x_axis = rb_pos.position.rotation * Vector2::x_axis();
         let object_x_velocity = rb_vel.linvel.dot(&object_x_axis) * object_x_axis.into_inner();
@@ -45,29 +38,45 @@ fn ant_movement_system(
             rb_forces.force += rb_pos.position.rotation
                 * Vector2::new(2.0, 0.0)
                 * (8.0 - object_x_velocity.norm())
-                * motor_force;
+                * ant.motor_force;
         }
 
         // Grip forces
         let object_y_axis = rb_pos.position.rotation * Vector2::y_axis();
         let object_y_velocity = rb_vel.linvel.dot(&object_y_axis) * object_y_axis.into_inner();
-        rb_forces.force -= object_y_velocity * grip_force;
+        rb_forces.force -= object_y_velocity * ant.grip_force;
 
         // Turning input
         if keys.pressed(KeyCode::Left) {
-            rb_forces.torque += turning_torque;
+            rb_forces.torque += ant.turning_torque;
         }
         if keys.pressed(KeyCode::Right) {
-            rb_forces.torque -= turning_torque;
+            rb_forces.torque -= ant.turning_torque;
         }
 
         // Random wandering
-        rb_forces.torque += random_turning_torque * (random::<f32>() * 2.0 - 1.0);
+        rb_forces.torque += ant.random_turning_torque * (random::<f32>() * 2.0 - 1.0);
     }
 }
 
 #[derive(Component)]
-struct Ant {}
+struct Ant {
+    motor_force: f32,
+    grip_force: f32,
+    turning_torque: f32,
+    random_turning_torque: f32,
+}
+
+impl Default for Ant {
+    fn default() -> Ant {
+        Ant {
+            motor_force: 4.0,
+            grip_force: 5.0,
+            turning_torque: 2.0,
+            random_turning_torque: 5.0,
+        }
+    }
+}
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = OrthographicCameraBundle::new_2d();
@@ -113,7 +122,9 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         })
         .insert(ColliderPositionSync::Discrete)
         .insert(ColliderDebugRender::with_id(2))
-        .insert(Ant {})
+        .insert(Ant {
+            ..Default::default()
+        })
         .id();
 
     // bottom wall
