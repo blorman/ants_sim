@@ -8,6 +8,8 @@ use bevy::{
     sprite::collide_aabb::{collide, Collision},
 };
 use bevy_ecs_tilemap::prelude::*;
+use bevy_rapier2d::prelude::*;
+use nalgebra::{Point2, Vector2};
 use noise::{HybridMulti, MultiFractal, NoiseFn};
 use rand::prelude::random;
 use rand::Rng;
@@ -35,9 +37,16 @@ const ANT_SIZE: f32 = 5.0;
 impl Plugin for AntsPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugin(TilemapPlugin)
+            .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+            .add_plugin(RapierRenderPlugin)
             .init_resource::<Config>()
             .init_resource::<MapGenerator>()
             .init_resource::<EditorInput>()
+            .insert_resource(RapierConfiguration {
+                scale: 5.0,
+                gravity: Vector::new(0.0, 0.0),
+                ..Default::default()
+            })
             .add_startup_system(setup.label("setup"))
             .add_startup_system(map_generator_system.after("setup"))
             .add_system(mouse_input_system)
@@ -49,6 +58,7 @@ impl Plugin for AntsPlugin {
                     .with_system(obstacle_collision_system)
                     .with_system(food_collision_system)
                     .with_system(ant_movement_system)
+                    .with_system(ant_movement_system2)
                     .with_system(trail_spawn_system)
                     .with_system(trail_decay_system),
             );
@@ -58,6 +68,24 @@ impl Plugin for AntsPlugin {
 #[derive(Component)]
 struct Ant {
     carrying_food: bool,
+    target_speed: f32,
+    motor_force: f32,
+    grip_force: f32,
+    turning_torque: f32,
+    random_turning_torque: f32,
+}
+
+impl Default for Ant {
+    fn default() -> Ant {
+        Ant {
+            carrying_food: false,
+            target_speed: 8.0,
+            motor_force: 4.0,
+            grip_force: 5.0,
+            turning_torque: 2.0,
+            random_turning_torque: 5.0,
+        }
+    }
 }
 
 #[derive(Component)]
@@ -148,11 +176,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
     config
         .entries
         .insert("sensor_turning_coefficient", ConfigValue::Float(1.0));
-
-    commands.spawn_bundle(OrthographicCameraBundle::new_2d());
+    let mut camera = OrthographicCameraBundle::new_2d();
+    camera.orthographic_projection.scale = 1.0;
+    commands.spawn_bundle(camera);
 
     // spawn ants
-    for _ in 0..10 {
+    for _ in 0..1 {
         commands
             .spawn_bundle(SpriteBundle {
                 texture: asset_server.load("ant.png"),
@@ -169,9 +198,110 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>, mut config: Res
                 ..Default::default()
             })
             .insert(Ant {
-                carrying_food: false,
+                ..Default::default()
             });
     }
+
+    /* Create a parallel rapier ant */
+    let rigid_body = RigidBodyBundle {
+        position: Vec2::new(0.0, 1.0).into(),
+        damping: RigidBodyDamping {
+            linear_damping: 2.0,
+            angular_damping: 5.0,
+        }
+        .into(),
+        ..Default::default()
+    };
+    let collider = ColliderBundle {
+        // TODO: debug render a capsule?
+        shape: ColliderShape::capsule(Point2::new(0.25, 0.0), Point2::new(-0.25, 0.0), 0.25).into(),
+        // shape: ColliderShape::cuboid(0.5, 0.25).into(),
+        material: ColliderMaterial {
+            restitution: 0.7,
+            friction: 0.0,
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
+    commands
+        .spawn_bundle(rigid_body)
+        .insert_bundle(collider)
+        .insert_bundle(SpriteBundle {
+            texture: asset_server.load("ant.png"),
+            transform: Transform {
+                scale: Vec3::new(ANT_SIZE, ANT_SIZE, 0.0),
+                ..Default::default()
+            },
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(1.0, 1.0)),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .insert(ColliderPositionSync::Discrete)
+        .insert(ColliderDebugRender::with_id(2))
+        .insert(Ant {
+            ..Default::default()
+        })
+        .id();
+
+    // bottom wall
+    commands
+        .spawn_bundle(ColliderBundle {
+            shape: ColliderShape::cuboid(180.0, 0.1).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
+            position: (Vec2::new(0.0, -60.0)).into(),
+            ..Default::default()
+        })
+        .insert(ColliderPositionSync::Discrete)
+        .insert(ColliderDebugRender::with_id(2));
+    // top wall
+    commands
+        .spawn_bundle(ColliderBundle {
+            shape: ColliderShape::cuboid(180.0, 0.1).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
+            position: (Vec2::new(0.0, 60.0)).into(),
+            ..Default::default()
+        })
+        .insert(ColliderPositionSync::Discrete)
+        .insert(ColliderDebugRender::with_id(2));
+    // left wall
+    commands
+        .spawn_bundle(ColliderBundle {
+            shape: ColliderShape::cuboid(0.1, 120.0).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
+            position: (Vec2::new(-90.0, 0.0)).into(),
+            ..Default::default()
+        })
+        .insert(ColliderPositionSync::Discrete)
+        .insert(ColliderDebugRender::with_id(2));
+    // right wall
+    commands
+        .spawn_bundle(ColliderBundle {
+            shape: ColliderShape::cuboid(0.1, 120.0).into(),
+            material: ColliderMaterial {
+                friction: 0.0,
+                ..Default::default()
+            }
+            .into(),
+            position: (Vec2::new(90.0, 0.0)).into(),
+            ..Default::default()
+        })
+        .insert(ColliderPositionSync::Discrete)
+        .insert(ColliderDebugRender::with_id(2));
 
     spawn_home(Vec3::new(0.0, -50.0, 0.0), &mut commands);
 
@@ -866,6 +996,45 @@ fn vec3_angle(v: Vec3) -> f32 {
         -angle
     } else {
         angle
+    }
+}
+
+fn ant_movement_system2(
+    keys: Res<Input<KeyCode>>,
+    mut rigid_bodies: Query<(
+        &Ant,
+        &mut RigidBodyForcesComponent,
+        &mut RigidBodyVelocityComponent,
+        &RigidBodyMassPropsComponent,
+        &mut RigidBodyPositionComponent,
+    )>,
+) {
+    for (ant, mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
+        // Motor forces
+        let object_x_axis = rb_pos.position.rotation * Vector2::x_axis();
+        let object_x_velocity = rb_vel.linvel.dot(&object_x_axis) * object_x_axis.into_inner();
+        if !keys.pressed(KeyCode::Down) {
+            rb_forces.force += rb_pos.position.rotation
+                * Vector2::x_axis().into_inner()
+                * (ant.target_speed - object_x_velocity.norm())
+                * ant.motor_force;
+        }
+
+        // Grip forces
+        let object_y_axis = rb_pos.position.rotation * Vector2::y_axis();
+        let object_y_velocity = rb_vel.linvel.dot(&object_y_axis) * object_y_axis.into_inner();
+        rb_forces.force -= object_y_velocity * ant.grip_force;
+
+        // Turning input
+        if keys.pressed(KeyCode::Left) {
+            rb_forces.torque += ant.turning_torque;
+        }
+        if keys.pressed(KeyCode::Right) {
+            rb_forces.torque -= ant.turning_torque;
+        }
+
+        // Random wandering
+        rb_forces.torque += ant.random_turning_torque * (random::<f32>() * 2.0 - 1.0);
     }
 }
 
