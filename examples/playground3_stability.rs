@@ -113,11 +113,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     for i in 0..2 {
         /* Create the bouncing ball. */
         let rigid_body = RigidBodyBundle {
-            // position: (Vec2::new(0.0, 5.0), 5.0).into(), // Translation and rotation.
             position: if i == 0 {
-                (Vec2::new(0.23, 0.324), 2.0)
+                (Vec2::new(-14.2, 6.2), -2.0)
             } else {
-                (Vec2::new(19.0, 14.0), 0.0)
+                (Vec2::new(18.8, 14.4), 1.57)
             }
             .into(),
             damping: RigidBodyDamping {
