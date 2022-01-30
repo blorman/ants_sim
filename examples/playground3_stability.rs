@@ -1,12 +1,13 @@
 use bevy::prelude::*;
+use bevy_rapier2d::physics::TimestepMode;
 use bevy_rapier2d::prelude::*;
-use nalgebra::{Point2, Vector2};
+use nalgebra::Vector2;
 use rand::random;
 use rand::rngs::StdRng;
-use rand::thread_rng;
-use rand::RngCore;
 
-const ANT_SIZE: f32 = 5.0;
+use rand::Rng;
+
+use rand::SeedableRng;
 
 fn main() {
     App::new()
@@ -16,6 +17,7 @@ fn main() {
         .insert_resource(RapierConfiguration {
             scale: 5.0,
             gravity: Vector::new(0.0, 0.0),
+            timestep_mode: TimestepMode::FixedTimestep,
             ..Default::default()
         })
         .add_startup_system(setup.label("setup"))
@@ -31,6 +33,7 @@ struct Ant {
     turning_torque: f32,
     random_turning_torque: f32,
     rng_can: Vec<f32>,
+    index: usize,
 }
 
 impl Default for Ant {
@@ -42,6 +45,7 @@ impl Default for Ant {
             turning_torque: 2.0,
             random_turning_torque: 5.0,
             rng_can: Vec::new(),
+            index: 0,
         }
     }
 }
@@ -50,6 +54,7 @@ fn ant_movement_system(
     keys: Res<Input<KeyCode>>,
     mut current_tick: Local<usize>,
     mut rigid_bodies: Query<(
+        Entity,
         &Ant,
         &mut RigidBodyForcesComponent,
         &mut RigidBodyVelocityComponent,
@@ -57,7 +62,14 @@ fn ant_movement_system(
         &mut RigidBodyPositionComponent,
     )>,
 ) {
-    for (ant, mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
+    for (entity, ant, mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
+        println!("Ant {} {:?}", ant.index, entity);
+        println!(
+            "  pos: {:?} angle: {}",
+            rb_pos.position.translation,
+            rb_pos.position.rotation.angle()
+        );
+
         // Motor forces
         let object_x_axis = rb_pos.position.rotation * Vector2::x_axis();
         let object_x_velocity = rb_vel.linvel.dot(&object_x_axis) * object_x_axis.into_inner();
@@ -96,14 +108,16 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut camera = OrthographicCameraBundle::new_2d();
     camera.orthographic_projection.scale = 0.25;
     commands.spawn_bundle(camera);
+    let mut r = StdRng::seed_from_u64(42);
 
     for i in 0..2 {
         /* Create the bouncing ball. */
         let rigid_body = RigidBodyBundle {
+            // position: (Vec2::new(0.0, 5.0), 5.0).into(), // Translation and rotation.
             position: if i == 0 {
-                Vec2::new(0.0, 0.0)
+                (Vec2::new(0.23, 0.324), 2.0)
             } else {
-                Vec2::new(19.0, 14.0)
+                (Vec2::new(19.0, 14.0), 0.0)
             }
             .into(),
             damping: RigidBodyDamping {
@@ -132,7 +146,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             .insert(ColliderPositionSync::Discrete)
             .insert(ColliderDebugRender::with_id(1))
             .insert(Ant {
-                // let mut r = StdRng::seed_from_u64(42);
+                rng_can: (0..100).map(|_i| r.gen()).collect::<Vec<_>>(),
+                index: i,
                 ..Default::default()
             })
             .id();
