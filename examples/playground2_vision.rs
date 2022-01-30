@@ -107,7 +107,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         .into(),
         ..Default::default()
     };
-    commands
+    let ant_entity = commands
         .spawn_bundle(rigid_body)
         .insert_bundle(collider)
         .insert_bundle(SpriteBundle {
@@ -123,11 +123,41 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
-        .insert(ColliderDebugRender::with_id(2))
+        .insert(ColliderDebugRender::with_id(1))
         .insert(Ant {
             ..Default::default()
         })
         .id();
+
+    // TODO: this seems to cause drag on the ant
+    let collider2 = ColliderBundle {
+        collider_type: ColliderType::Sensor.into(),
+        shape: ColliderShape::convex_hull(&[
+            Point2::new(0.0, 0.0),
+            Point2::new(1.0, -1.0),
+            Point2::new(1.0, 1.0),
+        ])
+        .unwrap()
+        .into(),
+        material: ColliderMaterial {
+            restitution: 0.0,
+            friction: 0.0,
+            ..Default::default()
+        }
+        .into(),
+        ..Default::default()
+    };
+
+    let collider_parent: ColliderParentComponent = ColliderParent {
+        handle: ant_entity.handle(),
+        pos_wrt_parent: Vec2::ZERO.into(),
+    }
+    .into();
+    commands
+        .spawn_bundle(collider2)
+        .insert(collider_parent)
+        .insert(ColliderPositionSync::Discrete)
+        .insert(ColliderDebugRender::with_id(2));
 
     // bottom wall
     commands
@@ -142,7 +172,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
-        .insert(ColliderDebugRender::with_id(2));
+        .insert(ColliderDebugRender::with_id(3));
     // top wall
     commands
         .spawn_bundle(ColliderBundle {
@@ -156,7 +186,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
-        .insert(ColliderDebugRender::with_id(2));
+        .insert(ColliderDebugRender::with_id(3));
     // left wall
     commands
         .spawn_bundle(ColliderBundle {
@@ -170,7 +200,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
-        .insert(ColliderDebugRender::with_id(2));
+        .insert(ColliderDebugRender::with_id(3));
     // right wall
     commands
         .spawn_bundle(ColliderBundle {
@@ -184,5 +214,5 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..Default::default()
         })
         .insert(ColliderPositionSync::Discrete)
-        .insert(ColliderDebugRender::with_id(2));
+        .insert(ColliderDebugRender::with_id(3));
 }

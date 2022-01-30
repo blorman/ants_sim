@@ -545,8 +545,6 @@ dependencies = [
 [[package]]
 name = "bevy_rapier2d"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc683f8957625c85f1617a9bf0227b1263d3f502c104c5079c74a196d53ca1fc"
 dependencies = [
  "bevy",
  "nalgebra",
