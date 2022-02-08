@@ -48,67 +48,10 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--example=playground1",
-                    "--package=ants_sim"
+                    "--example=playground1"
                 ],
                 "filter": {
                     "name": "playground1",
-                    "kind": "example"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in example 'playground1'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--example=playground1",
-                    "--package=ants_sim"
-                ],
-                "filter": {
-                    "name": "playground1",
-                    "kind": "example"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug example 'playground3_stability'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--example=playground3_stability",
-                    "--package=ants_sim"
-                ],
-                "filter": {
-                    "name": "playground3_stability",
-                    "kind": "example"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in example 'playground3_stability'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--example=playground3_stability",
-                    "--package=ants_sim"
-                ],
-                "filter": {
-                    "name": "playground3_stability",
                     "kind": "example"
                 }
             },
@@ -122,8 +65,7 @@
             "cargo": {
                 "args": [
                     "build",
-                    "--example=playground2_vision",
-                    "--package=ants_sim"
+                    "--example=playground2_vision"
                 ],
                 "filter": {
                     "name": "playground2_vision",
@@ -136,16 +78,14 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in example 'playground2_vision'",
+            "name": "Debug example 'playground3_stability'",
             "cargo": {
                 "args": [
-                    "test",
-                    "--no-run",
-                    "--example=playground2_vision",
-                    "--package=ants_sim"
+                    "build",
+                    "--example=playground3_stability"
                 ],
                 "filter": {
-                    "name": "playground2_vision",
+                    "name": "playground3_stability",
                     "kind": "example"
                 }
             },
