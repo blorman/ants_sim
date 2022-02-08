@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_rapier2d"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "bevy",
  "nalgebra",
@@ -1837,6 +1837,7 @@ checksum = "824845a0bf897a9042383849b02c1bc219c2383772efcd5c6f9766fa4b81aef3"
 dependencies = [
  "autocfg",
  "hashbrown 0.9.1",
+ "serde",
 ]
 
 [[package]]
@@ -2719,6 +2720,7 @@ dependencies = [
  "bitflags",
  "downcast-rs",
  "either",
+ "indexmap",
  "nalgebra",
  "num-derive",
  "num-traits",
@@ -2947,8 +2949,6 @@ checksum = "63e935c45e09cc6dcf00d2f0b2d630a58f4095320223d47fc68918722f0538b6"
 [[package]]
 name = "rapier2d"
 version = "0.12.0-alpha.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54993fcf878665e49dc36cacff0eb9021b7789462e6bb197698191fa17ef5bd8"
 dependencies = [
  "approx",
  "arrayvec",
@@ -2956,6 +2956,7 @@ dependencies = [
  "bitflags",
  "crossbeam",
  "downcast-rs",
+ "indexmap",
  "instant",
  "nalgebra",
  "num-derive",
@@ -3252,6 +3253,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fa406d0a270fc91831a28f705ba803ad05b971486af492317f1607390245b99"
 dependencies = [
  "approx",
+ "libm 0.2.1",
  "num-complex 0.4.0",
  "num-traits",
  "paste",
