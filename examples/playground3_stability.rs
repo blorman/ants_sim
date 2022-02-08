@@ -64,12 +64,8 @@ fn ant_movement_system(
     )>,
 ) {
     for (entity, ant, mut rb_forces, rb_vel, _rb_mprops, rb_pos) in rigid_bodies.iter_mut() {
-        println!("Ant {} {:?}", ant.index, entity);
-        println!(
-            "  pos: {:?} angle: {}",
-            rb_pos.position.translation,
-            rb_pos.position.rotation.angle()
-        );
+        println!("ZZZ 000 {:?} {:?} {:?}", entity, rb_forces.force, rb_forces.torque);
+        println!("ZZZ 001 {:?} {:?}", entity, rb_pos.position);
 
         // Motor forces
         let object_x_axis = rb_pos.position.rotation * Vector2::x_axis();
@@ -101,9 +97,11 @@ fn ant_movement_system(
             random::<f32>()
         };
         rb_forces.torque += ant.random_turning_torque * (random_f32 * 2.0 - 1.0);
+        println!("ZZZ 003 {:?} {:?} {:?}", entity, rb_forces.force, rb_forces.torque);
+        println!("ZZZ 004 {:?} {:?}", entity, rb_pos.position);
     }
     *current_tick += 1;
-    if *current_tick == 2 {
+    if *current_tick == 3 {
         exit(0);
     }
 }
@@ -149,7 +147,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             .insert(ColliderPositionSync::Discrete)
             .insert(ColliderDebugRender::with_id(1))
             .insert(Ant {
-                rng_can: (0..100).map(|_i| r.gen()).collect::<Vec<_>>(),
+                rng_can: (0..10000).map(|_i| r.gen()).collect::<Vec<_>>(),
                 index: i,
                 ..Default::default()
             })
