@@ -4,6 +4,7 @@ use bevy_rapier2d::prelude::*;
 use nalgebra::Vector2;
 use rand::random;
 use rand::rngs::StdRng;
+use std::process::exit;
 
 use rand::Rng;
 
@@ -102,6 +103,9 @@ fn ant_movement_system(
         rb_forces.torque += ant.random_turning_torque * (random_f32 * 2.0 - 1.0);
     }
     *current_tick += 1;
+    if *current_tick == 2 {
+        exit(0);
+    }
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
