@@ -1,0 +1,156 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'ants_sim'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=ants_sim",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "ants_sim",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'ants_sim'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=ants_sim",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "ants_sim",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'playground1'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=playground1",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "playground1",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'playground1'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=playground1",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "playground1",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'playground3_stability'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=playground3_stability",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "playground3_stability",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'playground3_stability'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=playground3_stability",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "playground3_stability",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'playground2_vision'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=playground2_vision",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "playground2_vision",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'playground2_vision'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=playground2_vision",
+                    "--package=ants_sim"
+                ],
+                "filter": {
+                    "name": "playground2_vision",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
